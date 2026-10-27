@@ -185,6 +185,25 @@ export interface CustomerDetail {
   tickets: TicketListItem[];
 }
 
+/** The signed-in agent: enough to greet them. */
+export interface AuthUser {
+  id: number;
+  fullName: string;
+  email: string;
+}
+
+export interface LoginPayload {
+  email: string;
+  password: string;
+}
+
+/** Response of POST /api/auth/login. */
+export interface LoginResponse {
+  token: string;
+  expiresAtUtc: string;
+  user: AuthUser;
+}
+
 /** RFC 7807 problem document, which is how the API reports every failure. */
 export interface ProblemDetails {
   type?: string;

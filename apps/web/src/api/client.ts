@@ -1,3 +1,4 @@
+import { clearSession, getSession } from '../lib/session';
 import type { ProblemDetails } from '../types/api';
 
 /**
@@ -25,21 +26,54 @@ export class ApiError extends Error {
   }
 }
 
+interface RequestOptions {
+  /**
+   * Sends no token, and a 401 is just an error. For signing in, where a 401 means wrong
+   * credentials rather than an expired session.
+   */
+  anonymous?: boolean;
+}
+
+let unauthorizedHandler: (() => void) | undefined;
+
 /**
- * The single place that talks to the API. Returns parsed JSON, or throws an
- * {@link ApiError} that callers can show to the user.
+ * Runs whenever a signed-in request comes back 401 (an expired or revoked token), after the
+ * session has been cleared. The app uses it to send the user to the login page. Returns a
+ * function that removes the handler.
  */
-export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export function setUnauthorizedHandler(handler: () => void): () => void {
+  unauthorizedHandler = handler;
+
+  return () => {
+    if (unauthorizedHandler === handler) {
+      unauthorizedHandler = undefined;
+    }
+  };
+}
+
+/**
+ * The single place that talks to the API. Attaches the signed-in agent's token, returns
+ * parsed JSON, or throws an {@link ApiError} that callers can show to the user.
+ */
+export async function request<T>(path: string, init?: RequestInit, options: RequestOptions = {}): Promise<T> {
+  const token = options.anonymous ? undefined : getSession()?.token;
+
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {}),
     },
   });
 
   if (!response.ok) {
     const problem = await readProblem(response);
+
+    if (response.status === 401 && !options.anonymous) {
+      clearSession();
+      unauthorizedHandler?.();
+    }
 
     throw new ApiError(
       response.status,
