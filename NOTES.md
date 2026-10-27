@@ -388,3 +388,63 @@ Existing Repository, Unit of Work and one-handler-per-use-case structure unchang
 - Boundaries tested on compiled C# AND SQLite: at due (unresolved) = AtRisk; exactly 25% left = AtRisk;
   resolved exactly at due = Met.
 - Verified SQL Server SQL in the API log (DATEADD on @now inside CASE).
+
+## Step 4 – Policies
+- PriorityPolicy, SlaWindowPolicy, AgentSelectionPolicy in Domain. Pure, no interfaces (nothing swaps them).
+- Window rounded to whole minutes, then the 1 h floor. Floor applies to every tier.
+- Agent: keep current if still eligible, else fewest open, tie → lowest Id, none → unassigned + reason.
+- Multiplier formatted with InvariantCulture in the reason text (could print "0,5" on some machines).
+
+## Step 5 – Triage on create
+- TicketTriage (Application) used by create AND escalate, so the rules run in one place.
+- POST /api/tickets → 201 { ticket, triage } with a reason for priority, window and agent.
+- No eligible agent → still 201, unassigned, with the reason. Inactive category → 409.
+- Candidates loaded in ONE query (checked in a SQLite test by counting commands).
+
+## Step 6 – Escalation
+- Ticket.Escalate checks the rules again and returns an immutable TicketEscalation row.
+- Due date restarts from the moment of escalation. Escalated ticket left out of agent counts,
+  so the current agent isn't blocked by their own ticket.
+- 400 (validator, Cascade.Stop so null doesn't crash), 404, 409 with "already Critical" or "is Resolved".
+- History newest first, ties broken by Id. Index (TicketId, EscalatedAtUtc DESC) serves both the FK
+  and this query.
+
+## Step 7 – slaStatus filter
+- One line in ApplyFilters, same SlaStatusRule as the projection, same "now" for both
+  → the filter and the shown status can't disagree. Applied before count and paging.
+
+## Step 8 – SLA indicator + filter (web)
+- One SlaIndicator for list and detail. Word + symbol per state, colour is extra (not colour only).
+- States in a Record<SlaStatus, ...> → a new API state is a compile error, not a grey badge.
+- SLA dropdown just adds slaStatus to filters; the DEFECT-117 fix handles the rest (no extra wiring).
+
+## Step 9 – Escalation panel + history (web)
+- Client validation = server limits (5–500 trimmed, name ≤ 100). Invalid input never reaches the API.
+- Panel hidden with a "why not" text when canEscalate is false; 409 from the server still shown.
+- Ticket and history updated from the response, no reload.
+- escalatedBy is typed by hand until Task 3 (then it should come from the logged-in user).
+
+## Step 10 – Triage result after create (web)
+- Confirmation shows priority, SLA window + due date, agent or "Unassigned", each with its reason.
+
+## Verification (SQL Server, after step 10)
+- AddTicketEscalations migration applied on API start.
+- TCK-0023 Medium → High (due +8 h, unassigned → Sara) → Critical (due +4 h, Sara kept).
+- Critical → 409, Resolved → 409, short reason → 400, empty actor → 400, unknown id → 404.
+- Rows and DESC index checked in the DB. Error keys (Reason, EscalatedBy) match what the UI reads.
+- Tests: dotnet 191 + 4, web 42. Lint and typecheck clean.
+- [ ] Browser check: escalate twice, raise a Security ticket for a Premium customer.
+
+## AI usage (Task 2)
+- Same workflow: design approved first, written to TASK2_PLAN.md, one step per commit, I review diffs.
+- Bugs AI introduced, caught by tests: static field order (compiled rule declared before the
+  expression → null); rounding test with 0.725 (floating point); handler test used a mocked Id of 0.
+- Lint caught constants exported from a component file → moved to slaStates.ts.
+- CHANGED: 409 test only checked the message; spec says "ticket unchanged" → added that assert.
+- Did NOT let it run the API against the dev DB without asking (migration writes data).
+
+## README todo (Task 2)
+- Why Sla moved to appsettings.json (BR-6 "or justify"): config for all envs, validated on start.
+- Index (TicketId, EscalatedAtUtc DESC) and why.
+- Known limitations: no rowversion → two escalations at once can both apply; manual assign skips
+  the specialist rule; SLA config change doesn't re-window existing tickets.

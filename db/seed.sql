@@ -61,7 +61,10 @@ SET IDENTITY_INSERT dbo.Customers OFF;
 /* ----------------------------------------------------------------- Agents */
 /* Marcus Doyle is deliberately at his MaxOpenTickets limit (6 open tickets),
    so he must be excluded by the "eligible agent" rule.
-   Yuki Tanaka is inactive but still owns historic closed tickets.            */
+   Yuki Tanaka is inactive but still owns historic closed tickets.
+   PasswordHash is left NULL on purpose: passwords are hashed at seed time by
+   the EF Core seeder, never stored here. Agents seeded by this script cannot
+   sign in until the API's development seeder has run.                       */
 SET IDENTITY_INSERT dbo.Agents ON;
 INSERT INTO dbo.Agents (Id, FullName, Email, IsActive, MaxOpenTickets, CreatedAtUtc) VALUES
     (1, N'Alex Turner',    N'alex.turner@northwind-support.example',    1, 10, DATEADD(DAY, -500, @Now)),

@@ -62,6 +62,7 @@ CREATE TABLE dbo.Agents
     IsActive       BIT           NOT NULL CONSTRAINT DF_Agents_IsActive DEFAULT (1),
     MaxOpenTickets INT           NOT NULL CONSTRAINT DF_Agents_MaxOpenTickets DEFAULT (10),
     CreatedAtUtc   DATETIME2(3)  NOT NULL CONSTRAINT DF_Agents_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
+    PasswordHash   NVARCHAR(256) NULL,     -- salted hash; NULL = no login
     CONSTRAINT UQ_Agents_Email UNIQUE (Email),
     CONSTRAINT CK_Agents_MaxOpenTickets CHECK (MaxOpenTickets > 0)
 );

@@ -19,6 +19,9 @@ public sealed class AgentConfiguration : IEntityTypeConfiguration<Agent>
 
         builder.Property(a => a.CreatedAtUtc).HasColumnType("datetime2(3)");
 
+        // Nullable: an agent without a hash simply cannot sign in.
+        builder.Property(a => a.PasswordHash).HasMaxLength(Agent.PasswordHashMaxLength);
+
         builder.HasIndex(a => a.Email).IsUnique().HasDatabaseName("UQ_Agents_Email");
 
         builder.HasMany(a => a.Specializations)

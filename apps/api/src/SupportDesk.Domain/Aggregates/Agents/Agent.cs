@@ -7,6 +7,9 @@ namespace SupportDesk.Domain.Aggregates.Agents;
 /// </summary>
 public sealed class Agent : AggregateRoot
 {
+    /// <summary>Room for the hasher's output (Identity v3 is 84 characters) and a future format.</summary>
+    public const int PasswordHashMaxLength = 256;
+
     private readonly List<AgentSpecialization> _specializations = [];
 
     private Agent()
@@ -39,6 +42,12 @@ public sealed class Agent : AggregateRoot
 
     public DateTime CreatedAtUtc { get; private set; }
 
+    /// <summary>
+    /// The salted hash of the agent's password, in the hasher's own format. Null means the agent
+    /// has no login. The domain never sees the password itself.
+    /// </summary>
+    public string? PasswordHash { get; private set; }
+
     /// <summary>The ticket categories this agent is qualified for.</summary>
     public IReadOnlyCollection<AgentSpecialization> Specializations => _specializations;
 
@@ -51,6 +60,15 @@ public sealed class Agent : AggregateRoot
         }
 
         _specializations.Add(new AgentSpecialization(categoryId));
+    }
+
+    /// <summary>Sets or replaces the agent's login. Takes a hash produced by the password hasher.</summary>
+    public void SetPasswordHash(string passwordHash)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(passwordHash);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(passwordHash.Length, PasswordHashMaxLength);
+
+        PasswordHash = passwordHash;
     }
 
     /// <summary>Stops the agent from taking new work. Their history is kept.</summary>
