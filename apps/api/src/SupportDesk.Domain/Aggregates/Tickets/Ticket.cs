@@ -43,6 +43,13 @@ public sealed class Ticket : AggregateRoot
     /// <summary>When the team has committed to responding by. Null when no SLA applies.</summary>
     public DateTime? DueAtUtc { get; private set; }
 
+    /// <summary>
+    /// The length of the SLA window <see cref="DueAtUtc"/> was set from, in minutes. Kept because
+    /// the window restarts on escalation, so it cannot be worked out from the creation time.
+    /// Null when no SLA applies.
+    /// </summary>
+    public int? SlaWindowMinutes { get; private set; }
+
     public DateTime? ResolvedAtUtc { get; private set; }
 
     /// <summary>True while the ticket still needs work from an agent.</summary>

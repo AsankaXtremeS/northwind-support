@@ -19,6 +19,7 @@ public sealed class TicketConfiguration : IEntityTypeConfiguration<Ticket>
         {
             t.HasCheckConstraint("CK_Tickets_Priority", "[Priority] BETWEEN 1 AND 4");
             t.HasCheckConstraint("CK_Tickets_Status", "[Status] BETWEEN 1 AND 5");
+            t.HasCheckConstraint("CK_Tickets_SlaWindowMinutes", "[SlaWindowMinutes] > 0");
         });
 
         builder.HasKey(t => t.Id);

@@ -100,13 +100,15 @@ CREATE TABLE dbo.Tickets
     CreatedAtUtc    DATETIME2(3)    NOT NULL CONSTRAINT DF_Tickets_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
     UpdatedAtUtc    DATETIME2(3)    NOT NULL CONSTRAINT DF_Tickets_UpdatedAtUtc DEFAULT (SYSUTCDATETIME()),
     DueAtUtc        DATETIME2(3)    NULL,
+    SlaWindowMinutes INT            NULL,   /* window DueAtUtc was set from; restarts on escalation */
     ResolvedAtUtc   DATETIME2(3)    NULL,
     CONSTRAINT UQ_Tickets_Reference UNIQUE (Reference),
     CONSTRAINT FK_Tickets_Customers FOREIGN KEY (CustomerId)  REFERENCES dbo.Customers (Id),
     CONSTRAINT FK_Tickets_Categories FOREIGN KEY (CategoryId) REFERENCES dbo.Categories (Id),
     CONSTRAINT FK_Tickets_Agents FOREIGN KEY (AssignedAgentId) REFERENCES dbo.Agents (Id),
     CONSTRAINT CK_Tickets_Priority CHECK (Priority BETWEEN 1 AND 4),
-    CONSTRAINT CK_Tickets_Status   CHECK (Status   BETWEEN 1 AND 5)
+    CONSTRAINT CK_Tickets_Status   CHECK (Status   BETWEEN 1 AND 5),
+    CONSTRAINT CK_Tickets_SlaWindowMinutes CHECK (SlaWindowMinutes > 0)
 );
 GO
 
