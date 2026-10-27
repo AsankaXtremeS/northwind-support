@@ -25,14 +25,16 @@ public sealed class TicketQueries(SupportDbContext db, IClock clock, IOptions<Sl
     /// </remarks>
     public async Task<PagedResult<TicketListItemDto>> GetPagedAsync(TicketQuery query, CancellationToken ct)
     {
-        var tickets = ApplyFilters(TicketsWithLabels(), query);
+        // One "now" for the filter and the projection, so a ticket listed under a status shows it.
+        var slaStatus = CurrentSlaStatus();
+        var tickets = ApplyFilters(TicketsWithLabels(), query, slaStatus);
 
         var totalCount = await tickets.CountAsync(ct);
 
         var items = await ApplySort(tickets, query)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
-            .Select(ToListItem())
+            .Select(ToListItem(slaStatus))
             .ToListAsync(ct);
 
         return new PagedResult<TicketListItemDto>(items, query.Page, query.PageSize, totalCount);
@@ -105,7 +107,7 @@ public sealed class TicketQueries(SupportDbContext db, IClock clock, IOptions<Sl
             .Where(x => x.Ticket.CustomerId == customerId)
             .OrderByDescending(x => x.Ticket.CreatedAtUtc)
             .ThenByDescending(x => x.Ticket.Id)
-            .Select(ToListItem())
+            .Select(ToListItem(CurrentSlaStatus()))
             .ToListAsync(ct);
 
     /// <summary>The SLA rule as of now, with the configured at-risk threshold.</summary>
@@ -113,10 +115,9 @@ public sealed class TicketQueries(SupportDbContext db, IClock clock, IOptions<Sl
         SlaStatusRule.For(clock.UtcNow, slaOptions.Value.AtRiskThresholdPercent);
 
     /// <summary>The list row, shared by the ticket list and a customer's tickets.</summary>
-    private Expression<Func<TicketWithLabels, TicketListItemDto>> ToListItem()
+    private static Expression<Func<TicketWithLabels, TicketListItemDto>> ToListItem(
+        Expression<Func<Ticket, SlaStatus>> slaStatus)
     {
-        var slaStatus = CurrentSlaStatus();
-
         Expression<Func<TicketWithLabels, TicketListItemDto>> toListItem = x => new TicketListItemDto
         {
             Id = x.Ticket.Id,
@@ -151,7 +152,8 @@ public sealed class TicketQueries(SupportDbContext db, IClock clock, IOptions<Sl
     /// Every list filter, one condition each. A filter left empty does not narrow the result;
     /// the ones supplied combine with AND.
     /// </summary>
-    private static IQueryable<TicketWithLabels> ApplyFilters(IQueryable<TicketWithLabels> source, TicketQuery query)
+    private static IQueryable<TicketWithLabels> ApplyFilters(
+        IQueryable<TicketWithLabels> source, TicketQuery query, Expression<Func<Ticket, SlaStatus>> slaStatus)
     {
         var search = query.Search?.Trim();
 
@@ -191,6 +193,12 @@ public sealed class TicketQueries(SupportDbContext db, IClock clock, IOptions<Sl
         if (query.UnassignedOnly)
         {
             source = source.Where(x => x.Ticket.AssignedAgentId == null);
+        }
+
+        if (query.SlaStatus is { } wantedSlaStatus)
+        {
+            Expression<Func<TicketWithLabels, bool>> hasSlaStatus = x => slaStatus.Inline(x.Ticket) == wantedSlaStatus;
+            source = source.Where(hasSlaStatus.Expand());
         }
 
         return source;

@@ -30,10 +30,12 @@ public static class SlaStatusCases
         { "Open, due date but no recorded window", 60, null, null, SlaStatus.WithinSla }
     };
 
-    public static Ticket Ticket(int? dueOffsetSeconds, int? windowMinutes, int? resolvedOffsetSeconds, int customerId = 1, int categoryId = 1)
+    public static Ticket Ticket(
+        int? dueOffsetSeconds, int? windowMinutes, int? resolvedOffsetSeconds,
+        int customerId = 1, int categoryId = 1, string reference = "TCK-0001")
     {
         var now = FixedClock.DefaultNow;
-        var builder = new TicketBuilder().ForCustomer(customerId).InCategory(categoryId);
+        var builder = new TicketBuilder().WithReference(reference).ForCustomer(customerId).InCategory(categoryId);
 
         if (resolvedOffsetSeconds is { } resolved)
         {
