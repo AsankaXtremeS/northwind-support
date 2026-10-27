@@ -17,6 +17,8 @@ public sealed class TicketBuilder
     private TicketStatus _status = TicketStatus.New;
     private int? _assignedAgentId;
     private DateTime? _resolvedAtUtc;
+    private DateTime? _dueAtUtc;
+    private int? _slaWindowMinutes;
 
     public TicketBuilder WithReference(string reference)
     {
@@ -67,6 +69,17 @@ public sealed class TicketBuilder
         return this;
     }
 
+    /// <summary>
+    /// Gives the ticket a due date and the SLA window it came from. Set by reflection, as the
+    /// seeder sets them through EF Core, until the triage behaviour that sets them exists.
+    /// </summary>
+    public TicketBuilder WithSla(DateTime dueAtUtc, int? windowMinutes)
+    {
+        _dueAtUtc = dueAtUtc;
+        _slaWindowMinutes = windowMinutes;
+        return this;
+    }
+
     public Ticket Build()
     {
         var ticket = Ticket.Raise(
@@ -86,6 +99,12 @@ public sealed class TicketBuilder
         if (_status != TicketStatus.New)
         {
             ticket.ChangeStatus(_status, _resolvedAtUtc ?? FixedClock.DefaultNow);
+        }
+
+        if (_dueAtUtc is not null)
+        {
+            typeof(Ticket).GetProperty(nameof(Ticket.DueAtUtc))!.SetValue(ticket, _dueAtUtc);
+            typeof(Ticket).GetProperty(nameof(Ticket.SlaWindowMinutes))!.SetValue(ticket, _slaWindowMinutes);
         }
 
         return ticket;

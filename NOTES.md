@@ -369,3 +369,13 @@ Existing Repository, Unit of Work and one-handler-per-use-case structure unchang
 3. `SlaStatusRule` as one expression in list/detail/customer projections; remove `SlaEvaluator`, move its tests onto the rule; boundary tests (compiled C# AND SQLite through the query); show the SQL Server SQL from the log.
 4+. Given one by one.
 
+
+
+## Step 2 – SlaWindowMinutes
+- Stored the applied window (not the status) so AtRisk = "25% or less of THIS window left",
+  and escalation can restart it. SLA status itself is still never stored (BR-8).
+- Migration order: add column → backfill (DATEDIFF minute) → check constraint (> 0).
+  Rows with due <= created stay NULL instead of failing.
+- Backfill wrapped in EXEC so the generated script also runs as a single batch (relevant for
+  production migration via script/bundle).
+- Verified on the existing seeded DB: migration applied, 0 tickets with a due date but no window.

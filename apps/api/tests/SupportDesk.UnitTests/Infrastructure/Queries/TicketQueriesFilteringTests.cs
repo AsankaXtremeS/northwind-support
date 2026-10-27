@@ -1,8 +1,10 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using SupportDesk.Application.Contracts.Common;
 using SupportDesk.Application.Contracts.Tickets;
+using SupportDesk.Application.Sla;
 using SupportDesk.Domain.Aggregates.Agents;
 using SupportDesk.Domain.Aggregates.Categories;
 using SupportDesk.Domain.Aggregates.Customers;
@@ -44,7 +46,7 @@ public sealed class TicketQueriesFilteringTests(ITestOutputHelper output) : IAsy
         await _db.Database.EnsureCreatedAsync();
         await SeedAsync();
 
-        _queries = new TicketQueries(_db, new FixedClock());
+        _queries = new TicketQueries(_db, new FixedClock(), Options.Create(new SlaOptions { AtRiskThresholdPercent = 25 }));
     }
 
     public async Task DisposeAsync()
