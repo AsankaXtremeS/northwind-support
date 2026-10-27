@@ -65,9 +65,9 @@ export function CreateTicketForm({ customers, categories, onCreated }: CreateTic
     setIsSaving(true);
 
     try {
-      const created = await ticketsApi.createTicket(payload);
+      const raised = await ticketsApi.createTicket(payload);
       setForm(emptyForm);
-      onCreated(created);
+      onCreated(raised.ticket);
     } catch (caught) {
       if (caught instanceof ApiError && Object.keys(caught.fieldErrors).length > 0) {
         setErrors(fromApiErrors(caught.fieldErrors));

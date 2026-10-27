@@ -1,5 +1,6 @@
 using SupportDesk.Domain.Common;
 using SupportDesk.Domain.Exceptions;
+using SupportDesk.Domain.Triage;
 
 namespace SupportDesk.Domain.Aggregates.Tickets;
 
@@ -84,6 +85,28 @@ public sealed class Ticket : AggregateRoot
             CreatedAtUtc = nowUtc,
             UpdatedAtUtc = nowUtc
         };
+    }
+
+    /// <summary>
+    /// Takes on what triage decided: priority, owner (or none), and an SLA window that starts
+    /// now, so the due date is <paramref name="nowUtc"/> plus the window.
+    /// </summary>
+    /// <exception cref="BusinessRuleViolationException">The ticket is resolved or closed.</exception>
+    public void ApplyTriage(TriageDecision triage, DateTime nowUtc)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(triage.Window.Minutes);
+
+        if (!IsOpen)
+        {
+            throw new BusinessRuleViolationException(
+                $"Ticket {Reference} is {Status} and cannot be triaged.");
+        }
+
+        Priority = triage.Priority.Priority;
+        AssignedAgentId = triage.Assignment.AgentId;
+        SlaWindowMinutes = triage.Window.Minutes;
+        DueAtUtc = nowUtc.AddMinutes(triage.Window.Minutes);
+        UpdatedAtUtc = nowUtc;
     }
 
     /// <summary>

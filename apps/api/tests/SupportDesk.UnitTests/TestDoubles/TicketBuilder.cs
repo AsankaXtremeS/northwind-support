@@ -1,4 +1,5 @@
 using SupportDesk.Domain.Aggregates.Tickets;
+using SupportDesk.Domain.Triage;
 
 namespace SupportDesk.UnitTests.TestDoubles;
 
@@ -70,8 +71,9 @@ public sealed class TicketBuilder
     }
 
     /// <summary>
-    /// Gives the ticket a due date and the SLA window it came from. Set by reflection, as the
-    /// seeder sets them through EF Core, until the triage behaviour that sets them exists.
+    /// Gives the ticket a due date and the SLA window it came from, through triage. A null window
+    /// stands for a row from before windows were recorded, which no behaviour can produce, so
+    /// that due date alone is set directly - as the seeder sets historical values through EF Core.
     /// </summary>
     public TicketBuilder WithSla(DateTime dueAtUtc, int? windowMinutes)
     {
@@ -96,15 +98,24 @@ public sealed class TicketBuilder
             ticket.AssignTo(_assignedAgentId, FixedClock.DefaultNow);
         }
 
+        if (_dueAtUtc is { } due && _slaWindowMinutes is { } window)
+        {
+            // Triage starts the window "now", so start it where it has to end on the due date.
+            ticket.ApplyTriage(
+                new TriageDecision(
+                    new PriorityDecision(_priority, "Built for a test."),
+                    new SlaWindow(window, "Built for a test."),
+                    new AssignmentDecision(_assignedAgentId, null, "Built for a test.")),
+                due.AddMinutes(-window));
+        }
+        else if (_dueAtUtc is not null)
+        {
+            typeof(Ticket).GetProperty(nameof(Ticket.DueAtUtc))!.SetValue(ticket, _dueAtUtc);
+        }
+
         if (_status != TicketStatus.New)
         {
             ticket.ChangeStatus(_status, _resolvedAtUtc ?? FixedClock.DefaultNow);
-        }
-
-        if (_dueAtUtc is not null)
-        {
-            typeof(Ticket).GetProperty(nameof(Ticket.DueAtUtc))!.SetValue(ticket, _dueAtUtc);
-            typeof(Ticket).GetProperty(nameof(Ticket.SlaWindowMinutes))!.SetValue(ticket, _slaWindowMinutes);
         }
 
         return ticket;

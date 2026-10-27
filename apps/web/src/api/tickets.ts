@@ -1,6 +1,7 @@
 import type {
   CreateTicketPayload,
   PagedResult,
+  RaisedTicket,
   TicketDetail,
   TicketFilters,
   TicketListItem,
@@ -43,7 +44,7 @@ export const ticketsApi = {
   getTicket: (id: number) => request<TicketDetail>(`/tickets/${id}`),
 
   createTicket: (payload: CreateTicketPayload) =>
-    request<TicketDetail>('/tickets', {
+    request<RaisedTicket>('/tickets', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),

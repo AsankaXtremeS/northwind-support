@@ -39,4 +39,7 @@ public sealed class Category : AggregateRoot
     /// reporter asked for.
     /// </summary>
     public bool ForcesCriticalPriority { get; private set; }
+
+    /// <summary>Stops new tickets being raised in this category. Existing tickets keep it.</summary>
+    public void Deactivate() => IsActive = false;
 }

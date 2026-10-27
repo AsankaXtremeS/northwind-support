@@ -1,5 +1,6 @@
 using SupportDesk.Domain.Aggregates.Tickets;
 using SupportDesk.Domain.Exceptions;
+using SupportDesk.Domain.Triage;
 using SupportDesk.UnitTests.TestDoubles;
 
 namespace SupportDesk.UnitTests.Domain.Aggregates.Tickets;
@@ -99,4 +100,45 @@ public class TicketTests
         Assert.Null(ticket.AssignedAgentId);
         Assert.Equal(Later, ticket.UpdatedAtUtc);
     }
+
+    [Fact]
+    public void ApplyTriage_SetsPriorityOwnerWindowAndADueDateFromNow()
+    {
+        var ticket = new TicketBuilder().WithPriority(TicketPriority.Low).Build();
+
+        ticket.ApplyTriage(Triage(TicketPriority.High, windowMinutes: 480, agentId: 2), Later);
+
+        Assert.Equal(TicketPriority.High, ticket.Priority);
+        Assert.Equal(2, ticket.AssignedAgentId);
+        Assert.Equal(480, ticket.SlaWindowMinutes);
+        Assert.Equal(Later.AddMinutes(480), ticket.DueAtUtc);
+        Assert.Equal(Later, ticket.UpdatedAtUtc);
+    }
+
+    [Fact]
+    public void ApplyTriage_WithNobodyToAssign_LeavesTheTicketUnassigned()
+    {
+        var ticket = new TicketBuilder().AssignedTo(3).Build();
+
+        ticket.ApplyTriage(Triage(TicketPriority.Medium, windowMinutes: 1440, agentId: null), Later);
+
+        Assert.Null(ticket.AssignedAgentId);
+    }
+
+    [Theory]
+    [InlineData(TicketStatus.Resolved)]
+    [InlineData(TicketStatus.Closed)]
+    public void ApplyTriage_WhenTheTicketIsNoLongerOpen_Throws(TicketStatus status)
+    {
+        var ticket = new TicketBuilder().WithStatus(status).Build();
+
+        Assert.Throws<BusinessRuleViolationException>(
+            () => ticket.ApplyTriage(Triage(TicketPriority.High, windowMinutes: 480, agentId: null), Later));
+        Assert.Null(ticket.DueAtUtc);
+    }
+
+    private static TriageDecision Triage(TicketPriority priority, int windowMinutes, int? agentId) =>
+        new(new PriorityDecision(priority, "test"),
+            new SlaWindow(windowMinutes, "test"),
+            new AssignmentDecision(agentId, agentId is null ? null : "Agent", "test"));
 }

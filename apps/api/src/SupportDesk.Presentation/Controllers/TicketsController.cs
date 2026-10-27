@@ -27,16 +27,16 @@ public sealed class TicketsController : ControllerBase
     public Task<TicketDetailDto> Get(int id, [FromServices] GetTicketQueryHandler handler, CancellationToken ct) =>
         handler.HandleAsync(id, ct);
 
-    /// <summary>Raises a new ticket.</summary>
+    /// <summary>Raises and triages a new ticket: priority, SLA window and owner, with the reasons.</summary>
     [HttpPost]
-    public async Task<ActionResult<TicketDetailDto>> Create(
+    public async Task<ActionResult<RaisedTicketDto>> Create(
         CreateTicketRequest request,
         [FromServices] RaiseTicketCommandHandler handler,
         CancellationToken ct)
     {
         var created = await handler.HandleAsync(request, ct);
 
-        return CreatedAtAction(nameof(Get), new { id = created.Id }, created);
+        return CreatedAtAction(nameof(Get), new { id = created.Ticket.Id }, created);
     }
 
     /// <summary>Moves a ticket to another status.</summary>

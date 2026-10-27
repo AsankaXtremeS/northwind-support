@@ -96,6 +96,22 @@ export interface TicketFilters {
   sortDirection: SortDirection;
 }
 
+/** What triage decided for a new ticket, with the reason for each part. */
+export interface Triage {
+  priority: TicketPriority;
+  priorityReason: string;
+  slaWindowMinutes: number;
+  slaWindowReason: string;
+  assignedAgent: AgentSummary | null;
+  assignmentReason: string;
+}
+
+/** Response of POST /api/tickets. */
+export interface RaisedTicket {
+  ticket: TicketDetail;
+  triage: Triage;
+}
+
 export interface CreateTicketPayload {
   title: string;
   description: string;
