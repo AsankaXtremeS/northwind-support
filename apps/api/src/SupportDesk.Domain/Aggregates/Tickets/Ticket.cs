@@ -158,9 +158,10 @@ public sealed class Ticket : AggregateRoot
     /// </summary>
     /// <exception cref="BusinessRuleViolationException">The ticket cannot be escalated.</exception>
     /// <exception cref="ArgumentException">
-    /// The triage is not for the next priority, or the reason or actor is missing or too long.
+    /// The triage is not for the next priority, the reason is missing or too long, or the actor
+    /// has no id or name.
     /// </exception>
-    public TicketEscalation Escalate(TriageDecision triage, string reason, string escalatedBy, DateTime nowUtc)
+    public TicketEscalation Escalate(TriageDecision triage, string reason, EscalationActor escalatedBy, DateTime nowUtc)
     {
         var toPriority = NextPriority();
 
@@ -179,9 +180,11 @@ public sealed class Ticket : AggregateRoot
                 nameof(reason));
         }
 
-        ArgumentException.ThrowIfNullOrWhiteSpace(escalatedBy);
-        var trimmedActor = escalatedBy.Trim();
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(trimmedActor.Length, TicketEscalation.EscalatedByMaxLength, nameof(escalatedBy));
+        ArgumentNullException.ThrowIfNull(escalatedBy);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(escalatedBy.AgentId, nameof(escalatedBy));
+        ArgumentException.ThrowIfNullOrWhiteSpace(escalatedBy.Name, nameof(escalatedBy));
+        var actorName = escalatedBy.Name.Trim();
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(actorName.Length, TicketEscalation.EscalatedByMaxLength, nameof(escalatedBy));
 
         var (fromPriority, fromAgentId, fromDueAtUtc) = (Priority, AssignedAgentId, DueAtUtc);
 
@@ -189,7 +192,7 @@ public sealed class Ticket : AggregateRoot
 
         var escalation = new TicketEscalation(
             Id, fromPriority, Priority, fromAgentId, AssignedAgentId, fromDueAtUtc, DueAtUtc!.Value,
-            trimmedReason, trimmedActor, nowUtc);
+            trimmedReason, escalatedBy.AgentId, actorName, nowUtc);
 
         _escalations.Add(escalation);
 

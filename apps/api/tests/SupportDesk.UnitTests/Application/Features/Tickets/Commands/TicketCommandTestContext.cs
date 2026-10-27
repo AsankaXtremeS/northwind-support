@@ -59,6 +59,10 @@ internal sealed class TicketCommandTestContext
                     null, FixedClock.DefaultNow.AddHours(8), "Customer is losing sales.", "Sara Lindqvist", FixedClock.DefaultNow)
             ]);
 
+        // The agent the request is signed in as, the one an escalation is recorded against.
+        CurrentUser.Setup(u => u.AgentId).Returns(SignedInAgentId);
+        ExistingAgent(SignedInAgentId, "Sara Lindqvist");
+
         var getTicket = new GetTicketQueryHandler(TicketQueries.Object);
 
         Triage = new TicketTriage(Agents.Object, new SlaWindowPolicy(ShippedSlaTerms));
@@ -68,7 +72,7 @@ internal sealed class TicketCommandTestContext
             NullLogger<RaiseTicketCommandHandler>.Instance);
 
         EscalateTicket = new EscalateTicketCommandHandler(
-            Tickets.Object, Customers.Object, Categories.Object, Triage, UnitOfWork.Object, Clock, getTicket,
+            CurrentUser.Object, Agents.Object, Tickets.Object, Customers.Object, Categories.Object, Triage, UnitOfWork.Object, Clock, getTicket,
             TicketQueries.Object, NullLogger<EscalateTicketCommandHandler>.Instance);
 
         ChangeTicketStatus = new ChangeTicketStatusCommandHandler(Tickets.Object, UnitOfWork.Object, Clock, getTicket);
@@ -77,6 +81,11 @@ internal sealed class TicketCommandTestContext
             Tickets.Object, Agents.Object, UnitOfWork.Object, Clock, getTicket,
             NullLogger<AssignTicketCommandHandler>.Instance);
     }
+
+    /// <summary>The id the signed-in agent's token carries; well clear of the ids tests use for owners.</summary>
+    public const int SignedInAgentId = 99;
+
+    public Mock<ICurrentUser> CurrentUser { get; } = new();
 
     public Mock<ITicketRepository> Tickets { get; } = new();
 

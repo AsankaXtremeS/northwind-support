@@ -11,7 +11,8 @@ public sealed class TicketEscalation : Entity
 {
     public const int ReasonMinLength = 5;
     public const int ReasonMaxLength = 500;
-    public const int EscalatedByMaxLength = 100;
+    /// <summary>The same as an agent's full name, which is what gets recorded.</summary>
+    public const int EscalatedByMaxLength = 200;
 
     private TicketEscalation()
     {
@@ -27,6 +28,7 @@ public sealed class TicketEscalation : Entity
         DateTime? fromDueAtUtc,
         DateTime toDueAtUtc,
         string reason,
+        int escalatedByAgentId,
         string escalatedBy,
         DateTime escalatedAtUtc)
     {
@@ -38,6 +40,7 @@ public sealed class TicketEscalation : Entity
         FromDueAtUtc = fromDueAtUtc;
         ToDueAtUtc = toDueAtUtc;
         Reason = reason;
+        EscalatedByAgentId = escalatedByAgentId;
         EscalatedBy = escalatedBy;
         EscalatedAtUtc = escalatedAtUtc;
     }
@@ -59,6 +62,13 @@ public sealed class TicketEscalation : Entity
 
     public string Reason { get; private set; } = string.Empty;
 
+    /// <summary>
+    /// The agent who escalated, taken from their sign-in. Null only for rows recorded before
+    /// sign-in existed, when the name was typed in.
+    /// </summary>
+    public int? EscalatedByAgentId { get; private set; }
+
+    /// <summary>The escalating agent's name at the time.</summary>
     public string EscalatedBy { get; private set; } = string.Empty;
 
     public DateTime EscalatedAtUtc { get; private set; }

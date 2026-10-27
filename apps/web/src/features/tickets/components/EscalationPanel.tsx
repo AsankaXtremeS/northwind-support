@@ -8,7 +8,6 @@ import type { EscalatedTicket, TicketDetail, TicketPriority } from '../../../typ
 /** The same limits the API checks, on the trimmed text. */
 const reasonMinLength = 5;
 const reasonMaxLength = 500;
-const escalatedByMaxLength = 100;
 
 const nextPriority: Record<TicketPriority, TicketPriority | undefined> = {
   Low: 'Medium',
@@ -17,20 +16,19 @@ const nextPriority: Record<TicketPriority, TicketPriority | undefined> = {
   Critical: undefined,
 };
 
-type FormField = 'reason' | 'escalatedBy';
-
-type FormState = Record<FormField, string>;
-
-type FormErrors = Partial<Record<FormField, string>>;
+type FormErrors = { reason?: string };
 
 interface EscalationPanelProps {
   ticket: TicketDetail;
   onEscalated: (escalated: EscalatedTicket) => void;
 }
 
-/** Raises the ticket one priority level, with a reason. Says why when it cannot. */
+/**
+ * Raises the ticket one priority level, with a reason. Says why when it cannot. The history
+ * records the signed-in agent, so there is no name to type.
+ */
 export function EscalationPanel({ ticket, onEscalated }: EscalationPanelProps) {
-  const [form, setForm] = useState<FormState>({ reason: '', escalatedBy: '' });
+  const [reason, setReason] = useState('');
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSaving, setIsSaving] = useState(false);
   const [submitError, setSubmitError] = useState<string>();
@@ -46,12 +44,10 @@ export function EscalationPanel({ ticket, onEscalated }: EscalationPanelProps) {
     );
   }
 
-  const update = (patch: Partial<FormState>) => setForm((current) => ({ ...current, ...patch }));
-
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const validationErrors = validate(form);
+    const validationErrors = validate(reason);
     setErrors(validationErrors);
     setSubmitError(undefined);
 
@@ -62,12 +58,8 @@ export function EscalationPanel({ ticket, onEscalated }: EscalationPanelProps) {
     setIsSaving(true);
 
     try {
-      const escalated = await ticketsApi.escalate(ticket.id, {
-        reason: form.reason.trim(),
-        escalatedBy: form.escalatedBy.trim(),
-      });
-      // Keep the name: the same person often escalates again.
-      setForm((current) => ({ ...current, reason: '' }));
+      const escalated = await ticketsApi.escalate(ticket.id, { reason: reason.trim() });
+      setReason('');
       onEscalated(escalated);
     } catch (caught) {
       if (caught instanceof ApiError) {
@@ -98,21 +90,9 @@ export function EscalationPanel({ ticket, onEscalated }: EscalationPanelProps) {
           <textarea
             {...fieldProps}
             rows={3}
-            value={form.reason}
+            value={reason}
             maxLength={reasonMaxLength}
-            onChange={(event) => update({ reason: event.target.value })}
-          />
-        )}
-      </Field>
-
-      <Field id="escalation-by" label="Escalated by" error={errors.escalatedBy}>
-        {(fieldProps) => (
-          <input
-            {...fieldProps}
-            type="text"
-            value={form.escalatedBy}
-            maxLength={escalatedByMaxLength}
-            onChange={(event) => update({ escalatedBy: event.target.value })}
+            onChange={(event) => setReason(event.target.value)}
           />
         )}
       </Field>
@@ -140,25 +120,15 @@ function whyNot(ticket: TicketDetail): string {
   return 'This ticket is already Critical, the highest priority.';
 }
 
-function validate(form: FormState): FormErrors {
-  const errors: FormErrors = {};
-  const reasonLength = form.reason.trim().length;
+function validate(reason: string): FormErrors {
+  const reasonLength = reason.trim().length;
 
-  if (reasonLength < reasonMinLength || reasonLength > reasonMaxLength) {
-    errors.reason = `Give a reason of ${reasonMinLength} to ${reasonMaxLength} characters.`;
-  }
-
-  if (form.escalatedBy.trim() === '') {
-    errors.escalatedBy = 'Say who is escalating.';
-  }
-
-  return errors;
+  return reasonLength < reasonMinLength || reasonLength > reasonMaxLength
+    ? { reason: `Give a reason of ${reasonMinLength} to ${reasonMaxLength} characters.` }
+    : {};
 }
 
-/** The API names the fields "Reason" and "EscalatedBy"; the form shows the first message of each. */
+/** The API names the field "Reason"; the form shows its first message. */
 function fromApiErrors(fieldErrors: Record<string, string[]>): FormErrors {
-  return {
-    reason: fieldErrors.Reason?.[0],
-    escalatedBy: fieldErrors.EscalatedBy?.[0],
-  };
+  return { reason: fieldErrors.Reason?.[0] };
 }

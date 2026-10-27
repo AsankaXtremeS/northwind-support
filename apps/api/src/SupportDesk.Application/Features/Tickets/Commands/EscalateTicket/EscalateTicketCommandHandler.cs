@@ -4,6 +4,7 @@ using SupportDesk.Application.Contracts.Tickets;
 using SupportDesk.Application.Exceptions;
 using SupportDesk.Application.Features.Tickets.Queries.GetTicket;
 using SupportDesk.Application.Features.Tickets.Triage;
+using SupportDesk.Domain.Aggregates.Tickets;
 using SupportDesk.Domain.Repositories;
 using SupportDesk.Domain.Triage;
 
@@ -14,6 +15,8 @@ namespace SupportDesk.Application.Features.Tickets.Commands.EscalateTicket;
 /// re-checked, through the same triage that raising a ticket uses, and the change is recorded.
 /// </summary>
 public sealed class EscalateTicketCommandHandler(
+    ICurrentUser currentUser,
+    IAgentRepository agents,
     ITicketRepository tickets,
     ICustomerRepository customers,
     ICategoryRepository categories,
@@ -24,12 +27,20 @@ public sealed class EscalateTicketCommandHandler(
     ITicketQueries ticketQueries,
     ILogger<EscalateTicketCommandHandler> logger)
 {
+    /// <exception cref="NotAuthenticatedException">The signed-in agent no longer exists or is inactive.</exception>
     /// <exception cref="NotFoundException">The ticket does not exist.</exception>
     /// <exception cref="Domain.Exceptions.BusinessRuleViolationException">
     /// The ticket is resolved, closed or already Critical.
     /// </exception>
     public async Task<EscalatedTicketDto> HandleAsync(int id, EscalateTicketRequest request, CancellationToken ct)
     {
+        // Who escalates comes from the token, never the request body.
+        var actor = await agents.GetByIdAsync(currentUser.AgentId, ct);
+        if (actor is not { IsActive: true })
+        {
+            throw new NotAuthenticatedException();
+        }
+
         var ticket = await tickets.GetByIdAsync(id, ct) ?? throw new NotFoundException("Ticket", id);
 
         // Before any triage: a Critical ticket has no next priority to triage for.
@@ -48,13 +59,14 @@ public sealed class EscalateTicketCommandHandler(
             excludeTicketId: ticket.Id,
             ct);
 
-        var escalation = ticket.Escalate(decision, request.Reason, request.EscalatedBy, clock.UtcNow);
+        var escalation = ticket.Escalate(
+            decision, request.Reason, new EscalationActor(currentUser.AgentId, actor.FullName), clock.UtcNow);
 
         await unitOfWork.SaveChangesAsync(ct);
 
         logger.LogInformation(
-            "Ticket {Reference} escalated {From} -> {To} by {EscalatedBy}; agent {FromAgent} -> {ToAgent}.",
-            ticket.Reference, escalation.FromPriority, escalation.ToPriority, escalation.EscalatedBy,
+            "Ticket {Reference} escalated {From} -> {To} by agent {EscalatedBy}; agent {FromAgent} -> {ToAgent}.",
+            ticket.Reference, escalation.FromPriority, escalation.ToPriority, escalation.EscalatedByAgentId,
             escalation.FromAgentId, escalation.ToAgentId);
 
         var history = await ticketQueries.GetEscalationsAsync(id, ct) ?? throw new NotFoundException("Ticket", id);

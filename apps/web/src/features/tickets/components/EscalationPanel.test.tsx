@@ -33,7 +33,7 @@ describe('EscalationPanel', () => {
     expect(screen.getByRole('button', { name: 'Escalate to High' })).toBeInTheDocument();
   });
 
-  it('sends the trimmed reason and name, then hands the response back', async () => {
+  it('sends only the trimmed reason, then hands the response back', async () => {
     const escalated = {
       ticket: ticketDetail({ priority: 'Critical', canEscalate: false }),
       escalation: ticketEscalation(),
@@ -42,14 +42,14 @@ describe('EscalationPanel', () => {
     const onEscalated = renderPanel();
 
     await userEvent.type(screen.getByLabelText('Reason'), '  Customer is blocked  ');
-    await userEvent.type(screen.getByLabelText('Escalated by'), ' Dana ');
     await userEvent.click(screen.getByRole('button', { name: 'Escalate to Critical' }));
 
-    expect(escalate).toHaveBeenCalledWith(12, { reason: 'Customer is blocked', escalatedBy: 'Dana' });
+    // No name: the API records the signed-in agent.
+    expect(escalate).toHaveBeenCalledWith(12, { reason: 'Customer is blocked' });
     expect(onEscalated).toHaveBeenCalledWith(escalated);
   });
 
-  it('does not call the API when the trimmed reason is too short or the name is missing', async () => {
+  it('does not call the API when the trimmed reason is too short', async () => {
     renderPanel();
 
     await userEvent.type(screen.getByLabelText('Reason'), '  abc   ');
@@ -57,7 +57,12 @@ describe('EscalationPanel', () => {
 
     expect(escalate).not.toHaveBeenCalled();
     expect(screen.getByText('Give a reason of 5 to 500 characters.')).toBeInTheDocument();
-    expect(screen.getByText('Say who is escalating.')).toBeInTheDocument();
+  });
+
+  it('has no field for who is escalating', () => {
+    renderPanel();
+
+    expect(screen.queryByLabelText('Escalated by')).not.toBeInTheDocument();
   });
 
   it('shows the API message and leaves the ticket unchanged when the escalation is refused', async () => {
@@ -67,7 +72,6 @@ describe('EscalationPanel', () => {
     const onEscalated = renderPanel();
 
     await userEvent.type(screen.getByLabelText('Reason'), 'Customer is blocked');
-    await userEvent.type(screen.getByLabelText('Escalated by'), 'Dana');
     await userEvent.click(screen.getByRole('button', { name: 'Escalate to Critical' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -88,7 +92,6 @@ describe('EscalationPanel', () => {
     renderPanel();
 
     await userEvent.type(screen.getByLabelText('Reason'), 'Customer is blocked');
-    await userEvent.type(screen.getByLabelText('Escalated by'), 'Dana');
     await userEvent.click(screen.getByRole('button', { name: 'Escalate to Critical' }));
 
     expect(await screen.findByText('Give a reason of 5 to 500 characters.')).toBeInTheDocument();

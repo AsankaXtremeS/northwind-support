@@ -10,7 +10,7 @@ namespace SupportDesk.UnitTests.Application.Features.Tickets.Commands;
 
 public class EscalateTicketCommandHandlerTests
 {
-    private static readonly EscalateTicketRequest Request = new("Customer is losing sales.", "Sara Lindqvist");
+    private static readonly EscalateTicketRequest Request = new("Customer is losing sales.");
 
     [Fact]
     public async Task HandleAsync_RaisesThePriorityOneLevelAndRestartsTheWindowFromNow()
@@ -106,6 +106,7 @@ public class EscalateTicketCommandHandlerTests
         Assert.Equal(originalDue, escalation.FromDueAtUtc);
         Assert.Equal(ticket.DueAtUtc, escalation.ToDueAtUtc);
         Assert.Equal("Customer is losing sales.", escalation.Reason);
+        Assert.Equal(TicketCommandTestContext.SignedInAgentId, escalation.EscalatedByAgentId);
         Assert.Equal("Sara Lindqvist", escalation.EscalatedBy);
         Assert.Equal(context.Clock.UtcNow, escalation.EscalatedAtUtc);
     }
@@ -149,6 +150,33 @@ public class EscalateTicketCommandHandlerTests
             () => context.EscalateTicket.HandleAsync(ticket.Id, Request, CancellationToken.None));
 
         Assert.Contains($"is {status}", exception.Message);
+        context.VerifySaved(Times.Never());
+    }
+
+    [Fact]
+    public async Task HandleAsync_SignedInAgentInactive_ThrowsNotAuthenticatedAndDoesNotSave()
+    {
+        var context = new TicketCommandTestContext();
+        context.ExistingAgent(TicketCommandTestContext.SignedInAgentId, "Sara Lindqvist", isActive: false);
+        var ticket = context.ExistingTicket(MediumTicket());
+
+        await Assert.ThrowsAsync<NotAuthenticatedException>(
+            () => context.EscalateTicket.HandleAsync(ticket.Id, Request, CancellationToken.None));
+
+        Assert.Empty(ticket.Escalations);
+        context.VerifySaved(Times.Never());
+    }
+
+    [Fact]
+    public async Task HandleAsync_SignedInAgentNoLongerExists_ThrowsNotAuthenticated()
+    {
+        var context = new TicketCommandTestContext();
+        context.CurrentUser.Setup(u => u.AgentId).Returns(12345);
+        var ticket = context.ExistingTicket(MediumTicket());
+
+        await Assert.ThrowsAsync<NotAuthenticatedException>(
+            () => context.EscalateTicket.HandleAsync(ticket.Id, Request, CancellationToken.None));
+
         context.VerifySaved(Times.Never());
     }
 

@@ -79,8 +79,8 @@ public sealed class TicketEscalationHistoryTests(ITestOutputHelper output) : IAs
     [Fact]
     public async Task GetEscalationsAsync_AfterTwoEscalations_ReturnsBothNewestFirstWithAgentNames()
     {
-        await EscalateAsync(toAgentId: _ben.Id, windowMinutes: 480, "Customer is losing sales.", "Sara Lindqvist", FirstEscalation);
-        await EscalateAsync(toAgentId: null, windowMinutes: 240, "Outage spreading to other sites.", "Marcus Doyle", SecondEscalation);
+        await EscalateAsync(toAgentId: _ben.Id, windowMinutes: 480, "Customer is losing sales.", _alex, FirstEscalation);
+        await EscalateAsync(toAgentId: null, windowMinutes: 240, "Outage spreading to other sites.", _ben, SecondEscalation);
 
         var history = await _queries.GetEscalationsAsync(_ticketId, CancellationToken.None);
 
@@ -95,7 +95,7 @@ public sealed class TicketEscalationHistoryTests(ITestOutputHelper output) : IAs
                 Assert.Null(newest.ToAgent);
                 Assert.Equal(FirstEscalation.AddMinutes(480), newest.FromDueAtUtc);
                 Assert.Equal(SecondEscalation.AddMinutes(240), newest.ToDueAtUtc);
-                Assert.Equal("Marcus Doyle", newest.EscalatedBy);
+                Assert.Equal("Ben Osei", newest.EscalatedBy);
                 Assert.Equal(SecondEscalation, newest.EscalatedAtUtc);
             },
             oldest =>
@@ -106,7 +106,7 @@ public sealed class TicketEscalationHistoryTests(ITestOutputHelper output) : IAs
                 Assert.Equal(new AgentSummaryDto(_ben.Id, "Ben Osei"), oldest.ToAgent);
                 Assert.Equal(FixedClock.DefaultNow.AddHours(24), oldest.FromDueAtUtc);
                 Assert.Equal("Customer is losing sales.", oldest.Reason);
-                Assert.Equal("Sara Lindqvist", oldest.EscalatedBy);
+                Assert.Equal("Alex Turner", oldest.EscalatedBy);
             });
     }
 
@@ -138,15 +138,15 @@ public sealed class TicketEscalationHistoryTests(ITestOutputHelper output) : IAs
     {
         Assert.True((await _queries.GetDetailAsync(_ticketId, CancellationToken.None))!.CanEscalate);
 
-        await EscalateAsync(toAgentId: _alex.Id, windowMinutes: 480, "Customer is losing sales.", "Sara Lindqvist", FirstEscalation);
+        await EscalateAsync(toAgentId: _alex.Id, windowMinutes: 480, "Customer is losing sales.", _alex, FirstEscalation);
         Assert.True((await _queries.GetDetailAsync(_ticketId, CancellationToken.None))!.CanEscalate);
 
-        await EscalateAsync(toAgentId: _alex.Id, windowMinutes: 240, "Outage spreading to other sites.", "Sara Lindqvist", SecondEscalation);
+        await EscalateAsync(toAgentId: _alex.Id, windowMinutes: 240, "Outage spreading to other sites.", _alex, SecondEscalation);
         Assert.False((await _queries.GetDetailAsync(_ticketId, CancellationToken.None))!.CanEscalate);
     }
 
     /// <summary>Escalates the way the command does: load tracked, escalate, save the unit of work.</summary>
-    private async Task EscalateAsync(int? toAgentId, int windowMinutes, string reason, string escalatedBy, DateTime now)
+    private async Task EscalateAsync(int? toAgentId, int windowMinutes, string reason, Agent escalatedBy, DateTime now)
     {
         var ticket = (await new TicketRepository(_db).GetByIdAsync(_ticketId, CancellationToken.None))!;
         var triage = new TriageDecision(
@@ -154,7 +154,7 @@ public sealed class TicketEscalationHistoryTests(ITestOutputHelper output) : IAs
             new SlaWindow(windowMinutes, "Window."),
             new AssignmentDecision(toAgentId, null, "Assignment."));
 
-        ticket.Escalate(triage, reason, escalatedBy, now);
+        ticket.Escalate(triage, reason, new EscalationActor(escalatedBy.Id, escalatedBy.FullName), now);
         await _db.SaveChangesAsync();
         _db.ChangeTracker.Clear();
     }

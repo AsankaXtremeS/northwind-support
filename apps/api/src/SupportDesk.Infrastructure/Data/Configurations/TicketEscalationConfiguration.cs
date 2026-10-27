@@ -7,7 +7,7 @@ namespace SupportDesk.Infrastructure.Data.Configurations;
 
 /// <summary>
 /// The escalation history. Part of the ticket aggregate (see <see cref="TicketConfiguration"/>);
-/// the agents before and after are referenced by id.
+/// the agents before and after, and the agent who escalated, are referenced by id.
 /// </summary>
 public sealed class TicketEscalationConfiguration : IEntityTypeConfiguration<TicketEscalation>
 {
@@ -44,6 +44,11 @@ public sealed class TicketEscalationConfiguration : IEntityTypeConfiguration<Tic
         builder.HasOne<Agent>()
             .WithMany()
             .HasForeignKey(e => e.ToAgentId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<Agent>()
+            .WithMany()
+            .HasForeignKey(e => e.EscalatedByAgentId)
             .OnDelete(DeleteBehavior.Restrict);
 
         // Serves "a ticket's history, newest first" with a seek and no sort, and doubles as the

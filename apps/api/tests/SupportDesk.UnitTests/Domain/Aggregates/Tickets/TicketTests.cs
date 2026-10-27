@@ -194,7 +194,7 @@ public class TicketTests
             .WithSla(FixedClock.DefaultNow.AddHours(24), windowMinutes: 1440)
             .Build();
 
-        ticket.Escalate(Triage(TicketPriority.High, windowMinutes: 480, agentId: null), "Customer is losing sales.", "Sara", Later);
+        ticket.Escalate(Triage(TicketPriority.High, windowMinutes: 480, agentId: null), "Customer is losing sales.", Sara, Later);
 
         Assert.Equal(TicketPriority.High, ticket.Priority);
         Assert.Equal(480, ticket.SlaWindowMinutes);
@@ -213,7 +213,7 @@ public class TicketTests
             .Build();
 
         var escalation = ticket.Escalate(
-            Triage(TicketPriority.High, windowMinutes: 480, agentId: 2), "  Customer is losing sales.  ", "  Sara  ", Later);
+            Triage(TicketPriority.High, windowMinutes: 480, agentId: 2), "  Customer is losing sales.  ", new EscalationActor(4, "  Sara  "), Later);
 
         Assert.Equal(TicketPriority.Medium, escalation.FromPriority);
         Assert.Equal(TicketPriority.High, escalation.ToPriority);
@@ -222,6 +222,7 @@ public class TicketTests
         Assert.Equal(originalDue, escalation.FromDueAtUtc);
         Assert.Equal(Later.AddMinutes(480), escalation.ToDueAtUtc);
         Assert.Equal("Customer is losing sales.", escalation.Reason);
+        Assert.Equal(4, escalation.EscalatedByAgentId);
         Assert.Equal("Sara", escalation.EscalatedBy);
         Assert.Equal(Later, escalation.EscalatedAtUtc);
         Assert.Same(escalation, Assert.Single(ticket.Escalations));
@@ -233,7 +234,7 @@ public class TicketTests
         var ticket = new TicketBuilder().WithPriority(TicketPriority.Low).Build();
 
         Assert.Throws<ArgumentException>(() =>
-            ticket.Escalate(Triage(TicketPriority.High, windowMinutes: 480, agentId: null), "Customer is losing sales.", "Sara", Later));
+            ticket.Escalate(Triage(TicketPriority.High, windowMinutes: 480, agentId: null), "Customer is losing sales.", Sara, Later));
 
         Assert.Equal(TicketPriority.Low, ticket.Priority);
         Assert.Empty(ticket.Escalations);
@@ -247,7 +248,7 @@ public class TicketTests
         var ticket = new TicketBuilder().WithPriority(TicketPriority.Low).Build();
 
         Assert.Throws<ArgumentException>(() =>
-            ticket.Escalate(Triage(TicketPriority.Medium, windowMinutes: 1440, agentId: null), reason, "Sara", Later));
+            ticket.Escalate(Triage(TicketPriority.Medium, windowMinutes: 1440, agentId: null), reason, Sara, Later));
         Assert.Empty(ticket.Escalations);
     }
 
@@ -257,16 +258,23 @@ public class TicketTests
         var ticket = new TicketBuilder().WithPriority(TicketPriority.Low).Build();
 
         Assert.Throws<ArgumentException>(() =>
-            ticket.Escalate(Triage(TicketPriority.Medium, windowMinutes: 1440, agentId: null), new string('x', 501), "Sara", Later));
+            ticket.Escalate(Triage(TicketPriority.Medium, windowMinutes: 1440, agentId: null), new string('x', 501), Sara, Later));
     }
 
-    [Fact]
-    public void Escalate_WithoutAnActor_Throws()
+    [Theory]
+    [InlineData(4, "  ")]
+    [InlineData(0, "Sara")]
+    public void Escalate_WithoutARealActor_Throws(int agentId, string name)
     {
         var ticket = new TicketBuilder().WithPriority(TicketPriority.Low).Build();
 
         Assert.ThrowsAny<ArgumentException>(() =>
-            ticket.Escalate(Triage(TicketPriority.Medium, windowMinutes: 1440, agentId: null), "Customer is losing sales.", "  ", Later));
+            ticket.Escalate(
+                Triage(TicketPriority.Medium, windowMinutes: 1440, agentId: null),
+                "Customer is losing sales.",
+                new EscalationActor(agentId, name),
+                Later));
+        Assert.Empty(ticket.Escalations);
     }
 
     [Fact]
@@ -275,9 +283,11 @@ public class TicketTests
         var ticket = new TicketBuilder().WithPriority(TicketPriority.Critical).Build();
 
         Assert.Throws<BusinessRuleViolationException>(() =>
-            ticket.Escalate(Triage(TicketPriority.Critical, windowMinutes: 240, agentId: null), "Customer is losing sales.", "Sara", Later));
+            ticket.Escalate(Triage(TicketPriority.Critical, windowMinutes: 240, agentId: null), "Customer is losing sales.", Sara, Later));
         Assert.Empty(ticket.Escalations);
     }
+
+    private static readonly EscalationActor Sara = new(4, "Sara");
 
     private static TriageDecision Triage(TicketPriority priority, int windowMinutes, int? agentId) =>
         new(new PriorityDecision(priority, "test"),

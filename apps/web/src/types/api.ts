@@ -97,9 +97,9 @@ export interface TicketEscalation {
   escalatedAtUtc: string;
 }
 
+/** Who escalates is not sent: the API takes it from the sign-in token. */
 export interface EscalateTicketPayload {
   reason: string;
-  escalatedBy: string;
 }
 
 /** Response of POST /api/tickets/{id}/escalate. */

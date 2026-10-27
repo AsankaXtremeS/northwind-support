@@ -14,7 +14,7 @@ public class EscalateTicketRequestValidatorTests
     [InlineData("     ")]
     public void Validate_WithAReasonShorterThanFiveOnceTrimmed_FailsOnReason(string reason)
     {
-        var result = _validator.Validate(new EscalateTicketRequest(reason, "Sara Lindqvist"));
+        var result = _validator.Validate(new EscalateTicketRequest(reason));
 
         Assert.Contains(result.Errors, error => error.PropertyName == nameof(EscalateTicketRequest.Reason));
     }
@@ -24,7 +24,7 @@ public class EscalateTicketRequestValidatorTests
     [InlineData(500)]
     public void Validate_WithAReasonAtTheLengthLimits_Passes(int length)
     {
-        var result = _validator.Validate(new EscalateTicketRequest(new string('x', length), "Sara Lindqvist"));
+        var result = _validator.Validate(new EscalateTicketRequest(new string('x', length)));
 
         Assert.True(result.IsValid);
     }
@@ -32,37 +32,16 @@ public class EscalateTicketRequestValidatorTests
     [Fact]
     public void Validate_WithAReasonOfFiveHundredAndOne_FailsOnReason()
     {
-        var result = _validator.Validate(new EscalateTicketRequest(new string('x', 501), "Sara Lindqvist"));
+        var result = _validator.Validate(new EscalateTicketRequest(new string('x', 501)));
 
         Assert.Contains(result.Errors, error => error.PropertyName == nameof(EscalateTicketRequest.Reason));
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void Validate_WithoutAnActor_FailsOnEscalatedBy(string? escalatedBy)
-    {
-        var result = _validator.Validate(new EscalateTicketRequest("Customer is losing sales.", escalatedBy!));
-
-        Assert.Contains(result.Errors, error => error.PropertyName == nameof(EscalateTicketRequest.EscalatedBy));
     }
 
     [Fact]
     public void Validate_WithAMissingReason_FailsWithoutThrowing()
     {
-        var result = _validator.Validate(new EscalateTicketRequest(null!, "Sara Lindqvist"));
+        var result = _validator.Validate(new EscalateTicketRequest(null!));
 
         Assert.Contains(result.Errors, error => error.PropertyName == nameof(EscalateTicketRequest.Reason));
-    }
-
-    [Theory]
-    [InlineData(100, true)]
-    [InlineData(101, false)]
-    public void Validate_WithAnActorAroundTheLengthLimit_PassesOnlyUpToOneHundred(int length, bool expectedValid)
-    {
-        var result = _validator.Validate(new EscalateTicketRequest("Customer is losing sales.", new string('a', length)));
-
-        Assert.Equal(expectedValid, result.IsValid);
     }
 }
