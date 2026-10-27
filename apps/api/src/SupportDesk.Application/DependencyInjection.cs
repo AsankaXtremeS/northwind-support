@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using SupportDesk.Application.Auth;
 using SupportDesk.Application.Features.Auth.Login;
+using SupportDesk.Application.Features.Auth.Me;
 using SupportDesk.Application.Features.Agents.Queries.GetAgents;
 using SupportDesk.Application.Features.Categories.Queries.GetCategories;
 using SupportDesk.Application.Features.Customers.Queries.GetCustomer;
@@ -48,6 +49,7 @@ public static class DependencyInjection
         services.AddScoped<GetCategoriesQueryHandler>();
 
         services.AddScoped<LoginCommandHandler>();
+        services.AddScoped<GetCurrentAgentQueryHandler>();
 
         services.AddValidatorsFromAssemblyContaining<RaiseTicketCommandHandler>(ServiceLifetime.Singleton);
 

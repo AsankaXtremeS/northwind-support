@@ -1,7 +1,6 @@
 using System.Text.Json.Serialization;
+using Microsoft.OpenApi;
 using SupportDesk.Application;
-using SupportDesk.Application.Abstractions;
-using SupportDesk.Application.Auth;
 using SupportDesk.Application.Sla;
 using SupportDesk.Infrastructure;
 using SupportDesk.Presentation.Auth;
@@ -29,7 +28,21 @@ builder.Services.AddCors(options => options.AddPolicy(
         .AllowAnyMethod()));
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    // An "Authorize" button in Swagger UI: paste a token from POST /api/auth/login.
+    options.AddSecurityDefinition("bearer", new OpenApiSecurityScheme
+    {
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        Description = "Token from POST /api/auth/login."
+    });
+    options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecuritySchemeReference("bearer", document)] = []
+    });
+});
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -39,12 +52,7 @@ builder.Services.AddOptions<SlaOptions>()
     .Bind(builder.Configuration.GetSection(SlaOptions.SectionName))
     .ValidateOnStart();
 
-// A missing or short signing key stops the application here, not at the first sign-in.
-builder.Services.AddOptions<JwtOptions>()
-    .Bind(builder.Configuration.GetSection(JwtOptions.SectionName))
-    .ValidateOnStart();
-
-builder.Services.AddSingleton<ITokenIssuer, JwtTokenIssuer>();
+builder.Services.AddTokenAuthentication(builder.Configuration);
 
 var app = builder.Build();
 
@@ -61,6 +69,12 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors(FrontendCorsPolicy);
 
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.MapControllers();
 
 app.Run();
+
+/// <summary>Visible to the integration tests' WebApplicationFactory.</summary>
+public partial class Program;

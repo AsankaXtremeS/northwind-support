@@ -39,6 +39,11 @@ public sealed class ExceptionHandlingMiddleware(
             await WriteAsync(context, Problem("Unauthorized", exception.Message, StatusCodes.Status401Unauthorized),
                 StatusCodes.Status401Unauthorized);
         }
+        catch (NotAuthenticatedException exception)
+        {
+            await WriteAsync(context, Problem("Unauthorized", exception.Message, StatusCodes.Status401Unauthorized),
+                StatusCodes.Status401Unauthorized);
+        }
         catch (NotFoundException exception)
         {
             await WriteAsync(context, Problem("Not Found", exception.Message, StatusCodes.Status404NotFound),

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SupportDesk.Application.Contracts.Auth;
 using SupportDesk.Application.Features.Auth.Login;
+using SupportDesk.Application.Features.Auth.Me;
 
 namespace SupportDesk.Presentation.Controllers;
 
@@ -21,4 +22,9 @@ public sealed class AuthController : ControllerBase
         [FromServices] LoginCommandHandler handler,
         CancellationToken ct) =>
         handler.HandleAsync(request, ct);
+
+    /// <summary>The signed-in agent, or 401 without a valid token or once they are deactivated.</summary>
+    [HttpGet("me")]
+    public Task<AuthUserDto> Me([FromServices] GetCurrentAgentQueryHandler handler, CancellationToken ct) =>
+        handler.HandleAsync(ct);
 }
