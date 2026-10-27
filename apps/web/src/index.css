@@ -460,6 +460,10 @@ textarea[aria-invalid='true'] {
   border-left: 4px solid var(--colour-primary);
 }
 
+.triage {
+  margin-bottom: var(--gap);
+}
+
 .pagination {
   display: flex;
   align-items: center;

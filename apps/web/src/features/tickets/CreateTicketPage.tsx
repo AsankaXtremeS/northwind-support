@@ -3,13 +3,14 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ErrorMessage } from '../../components/ErrorMessage';
 import { Spinner } from '../../components/Spinner';
 import { useReferenceData } from '../../hooks/useReferenceData';
-import type { TicketDetail } from '../../types/api';
+import type { RaisedTicket } from '../../types/api';
 import { CreateTicketForm } from './components/CreateTicketForm';
+import { TriageResult } from './components/TriageResult';
 
 export function CreateTicketPage() {
   const reference = useReferenceData();
   const navigate = useNavigate();
-  const [created, setCreated] = useState<TicketDetail>();
+  const [raised, setRaised] = useState<RaisedTicket>();
 
   return (
     <section>
@@ -28,31 +29,32 @@ export function CreateTicketPage() {
         <ErrorMessage message={reference.error} onRetry={() => void reference.reload()} />
       )}
 
-      {created && (
+      {raised && (
         <div className="card notice" role="status">
           <p>
-            Raised <strong>{created.reference}</strong> for {created.customer.name}.
+            Raised <strong>{raised.ticket.reference}</strong> for {raised.ticket.customer.name}.
           </p>
+          <TriageResult raised={raised} />
           <div className="button-row">
             <button
               type="button"
               className="button button--primary"
-              onClick={() => void navigate(`/tickets/${created.id}`)}
+              onClick={() => void navigate(`/tickets/${raised.ticket.id}`)}
             >
-              Open {created.reference}
+              Open {raised.ticket.reference}
             </button>
-            <button type="button" className="button button--ghost" onClick={() => setCreated(undefined)}>
+            <button type="button" className="button button--ghost" onClick={() => setRaised(undefined)}>
               Raise another
             </button>
           </div>
         </div>
       )}
 
-      {reference.data && !created && (
+      {reference.data && !raised && (
         <CreateTicketForm
           customers={reference.data.customers}
           categories={reference.data.categories}
-          onCreated={setCreated}
+          onCreated={setRaised}
         />
       )}
     </section>

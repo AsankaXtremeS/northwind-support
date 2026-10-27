@@ -6,7 +6,7 @@ import type {
   Category,
   CreateTicketPayload,
   CustomerListItem,
-  TicketDetail,
+  RaisedTicket,
   TicketPriority,
 } from '../../../types/api';
 
@@ -15,7 +15,8 @@ const priorities: TicketPriority[] = ['Low', 'Medium', 'High', 'Critical'];
 interface CreateTicketFormProps {
   customers: CustomerListItem[];
   categories: Category[];
-  onCreated: (ticket: TicketDetail) => void;
+  /** The new ticket and what triage decided for it. */
+  onCreated: (raised: RaisedTicket) => void;
 }
 
 interface FormState {
@@ -67,7 +68,7 @@ export function CreateTicketForm({ customers, categories, onCreated }: CreateTic
     try {
       const raised = await ticketsApi.createTicket(payload);
       setForm(emptyForm);
-      onCreated(raised.ticket);
+      onCreated(raised);
     } catch (caught) {
       if (caught instanceof ApiError && Object.keys(caught.fieldErrors).length > 0) {
         setErrors(fromApiErrors(caught.fieldErrors));
