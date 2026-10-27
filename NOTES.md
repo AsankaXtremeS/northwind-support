@@ -448,3 +448,62 @@ Existing Repository, Unit of Work and one-handler-per-use-case structure unchang
 - Index (TicketId, EscalatedAtUtc DESC) and why.
 - Known limitations: no rowversion → two escalations at once can both apply; manual assign skips
   the specialist rule; SLA config change doesn't re-window existing tickets.
+
+
+
+# Task 3 – Login and authentication
+
+## Decisions
+- PasswordHash column on Agent (nullable), not a Users table. Only agents sign in, 1:1, no roles.
+  NULL = no login. A Users table only pays off with non-agent users (out of scope).
+- Identity PasswordHasher behind IPasswordHasher (Application). PBKDF2-HMAC-SHA512, 100k iterations,
+  random salt, versioned format (checked in the DB: hash header AQAAAAIAAYag...).
+  Package Microsoft.Extensions.Identity.Core: not an AspNetCore assembly, so the layer test holds.
+- Same 401 + same message for unknown email / wrong password / inactive / no password.
+  Unknown email still runs one hash → timing doesn't leak which emails exist. Reason only in the log (agent id, never the email).
+- JWT HS256, lifetime 8 h (one shift), no refresh token (not wanted). ClockSkew 30 s (default 5 min).
+- Signing key: not in .cs, not in appsettings.json. Dev key in appsettings.Development.json (obviously fake),
+  elsewhere Jwt__SigningKey. ValidateOnStart: no key or < 32 bytes → app won't start.
+- Fallback policy RequireAuthenticatedUser → every endpoint closed, only login has [AllowAnonymous].
+  Swagger is middleware, not an endpoint → stays open (Authorize button added).
+- /me reads the agent from the DB → deactivated agent gets 401 there.
+- AU-8: escalatedBy from the token. New EscalatedByAgentId FK + name snapshot in EscalatedBy.
+  EscalatedBy widened 100 → 200 (= Agents.FullName). Old rows: AgentId NULL, typed name kept.
+- Dev seeding: passwords set for any agent with NULL hash, even on an already seeded DB.
+  seed.sql leaves PasswordHash NULL (hashing happens in the seeder only).
+- Web token in sessionStorage: survives refresh, not shared across tabs, gone on tab close.
+  Trade-off: XSS can read it. httpOnly cookie avoids that but needs cookie auth + CSRF → more than needed.
+- client.ts adds the Bearer header; any 401 clears the session → RequireAuth sends to /login
+  (with "session has ended" message), then back to the page they were on. Login call is anonymous
+  (its 401 = wrong credentials, no redirect). Return path only accepts in-app paths (no open redirect).
+
+## Steps
+1. PasswordHash column + migration. 2. Hasher + dev seeding. 3. POST /api/auth/login.
+4. Fallback policy, /me, Swagger button, integration test project (WebApplicationFactory + SQLite).
+5. escalatedBy from token. 6. Web session + client token + 401. 7. Login page, RequireAuth, header + logout.
+
+## Verification (SQL Server)
+- Migrations AddAgentPasswordHash + AddEscalatedByAgent applied on start; "Set the development password for 6 agents."
+- Sara login 200 (also with UPPERCASE email). Wrong password / unknown email / Yuki → identical 401. Empty → 400.
+- No token → 401 on tickets, customers, agents, categories, escalations, /me (+ WWW-Authenticate: Bearer).
+  With token → 200. Swagger UI + json open without token, bearer scheme present.
+- Escalated TCK-0024 as Sara with "Somebody Else" in the body → recorded Sara, EscalatedByAgentId 4.
+- DB: 6 distinct hashes, length 84, none contains the password.
+- Vite proxy: /login served, /api via proxy 401 without token, login 200.
+- Tests: dotnet 227 unit + 33 integration + 4 architecture, web 69. Lint + typecheck clean.
+- Mutation checks: no fallback policy → 15 integration tests fail; RequireAuth disabled → 4 web tests fail.
+- [ ] Browser check: sign in, reload, log out, open /tickets/12 signed out → login → back to /tickets/12.
+
+## AI usage (Task 3)
+- Plan first with decisions + 3 questions (packages, AU-8 option, seed.sql); I answered, then step by step.
+- Checked current docs (Context7) for Swashbuckle 10 bearer setup and the EF test DbContext swap.
+- Mutation-tested the auth tests (they pass for the right reason).
+- CHANGED: test name with an extra underscore → renamed to Method_Condition_Outcome.
+- Placeholder Jwt__SigningKey in .env.example commented out, so it can't override the dev key.
+
+## README todo (Task 3)
+- Credential storage, hashing, token issue + storage, lifetime, production changes (real key from
+  a secret store, HTTPS, shorter lifetime + refresh/revocation if needed).
+- Dev login: any seeded agent email + LocalDevOnly-NotARealPassword-1 (Yuki inactive).
+- Known limitations: token valid until expiry after deactivation (only /me + login re-check);
+  no lockout/rate limiting; sessionStorage readable by XSS; CORS origins hard-coded.

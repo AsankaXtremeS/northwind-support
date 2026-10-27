@@ -76,6 +76,24 @@ a {
   font-weight: 600;
 }
 
+.app__user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  font-size: 0.9rem;
+}
+
+.login {
+  max-width: 440px;
+  padding-top: 64px;
+}
+
+.login__notice {
+  margin: 0 0 var(--gap);
+  padding: 8px 12px;
+}
+
 .app__main {
   max-width: 1200px;
   margin: 0 auto;
