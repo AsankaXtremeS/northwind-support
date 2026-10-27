@@ -119,6 +119,19 @@ public class SlaOptionsValidatorTests
         Assert.Equal(6, result.Failures!.Count());
     }
 
+    [Fact]
+    public void ToTerms_CopiesTheWindowTermsSoLaterEditsDoNotLeakIn()
+    {
+        var options = ValidOptions();
+
+        var terms = options.ToTerms();
+        options.BaseWindowHours[TicketPriority.High] = 99;
+
+        Assert.Equal(8, terms.BaseWindowHours[TicketPriority.High]);
+        Assert.Equal(0.5, terms.PremiumCustomerMultiplier);
+        Assert.Equal(1, terms.MinimumWindowHours);
+    }
+
     /// <summary>The values shipped in appsettings.json.</summary>
     private static SlaOptions ValidOptions() => new()
     {

@@ -379,3 +379,12 @@ Existing Repository, Unit of Work and one-handler-per-use-case structure unchang
 - Backfill wrapped in EXEC so the generated script also runs as a single batch (relevant for
   production migration via script/bundle).
 - Verified on the existing seeded DB: migration applied, 0 tickets with a due date but no window.
+
+## Step 3 – SLA status rule
+- One Expression<Func<Ticket, SlaStatus>> (SlaStatusRule) → used in SQL projections (and the
+  slaStatus filter in step 7) and compiled for unit tests. Removed SlaEvaluator (rule existed in C# only,
+  never returned AtRisk). Rejected option B (C# + separate SQL copy) because it duplicates the rule.
+- Date arithmetic on the @now parameter only, never on columns → translates on both providers.
+- Boundaries tested on compiled C# AND SQLite: at due (unresolved) = AtRisk; exactly 25% left = AtRisk;
+  resolved exactly at due = Met.
+- Verified SQL Server SQL in the API log (DATEADD on @now inside CASE).

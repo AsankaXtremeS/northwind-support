@@ -1,4 +1,5 @@
 using SupportDesk.Domain.Aggregates.Tickets;
+using SupportDesk.Domain.Triage;
 
 namespace SupportDesk.Application.Sla;
 
@@ -21,4 +22,8 @@ public sealed class SlaOptions
 
     /// <summary>An open ticket with this share of its window or less remaining is at risk.</summary>
     public int AtRiskThresholdPercent { get; set; }
+
+    /// <summary>The window terms in the domain's own type, copied so later edits cannot leak in.</summary>
+    public SlaTerms ToTerms() =>
+        new(new Dictionary<TicketPriority, double>(BaseWindowHours), PremiumCustomerMultiplier, MinimumWindowHours);
 }
