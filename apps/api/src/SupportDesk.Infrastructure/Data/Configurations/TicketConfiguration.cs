@@ -60,6 +60,17 @@ public sealed class TicketConfiguration : IEntityTypeConfiguration<Ticket>
 
         builder.Ignore(t => t.IsOpen);
 
+        builder.Ignore(t => t.CanEscalate);
+
+        // Escalations belong to the ticket. Restrict: a ticket with history is never deleted
+        // along with it by accident.
+        builder.HasMany(t => t.Escalations)
+            .WithOne()
+            .HasForeignKey(e => e.TicketId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Navigation(t => t.Escalations).UsePropertyAccessMode(PropertyAccessMode.Field);
+
         builder.HasIndex(t => t.Reference).IsUnique().HasDatabaseName("UQ_Tickets_Reference");
 
         // Covers the list screen's most common filter pair.

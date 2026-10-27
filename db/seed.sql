@@ -19,6 +19,7 @@ GO
 
 SET NOCOUNT ON;
 
+DELETE FROM dbo.TicketEscalations;
 DELETE FROM dbo.AgentSpecializations;
 DELETE FROM dbo.Tickets;
 DELETE FROM dbo.Agents;
@@ -26,6 +27,7 @@ DELETE FROM dbo.Customers;
 DELETE FROM dbo.Categories;
 GO
 
+DBCC CHECKIDENT ('dbo.TicketEscalations', RESEED, 0) WITH NO_INFOMSGS;
 DBCC CHECKIDENT ('dbo.Tickets',    RESEED, 0) WITH NO_INFOMSGS;
 DBCC CHECKIDENT ('dbo.Agents',     RESEED, 0) WITH NO_INFOMSGS;
 DBCC CHECKIDENT ('dbo.Customers',  RESEED, 0) WITH NO_INFOMSGS;

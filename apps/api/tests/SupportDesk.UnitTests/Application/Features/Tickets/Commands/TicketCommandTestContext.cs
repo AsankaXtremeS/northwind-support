@@ -3,6 +3,7 @@ using SupportDesk.Application.Abstractions;
 using SupportDesk.Application.Contracts.Tickets;
 using SupportDesk.Application.Features.Tickets.Commands.AssignTicket;
 using SupportDesk.Application.Features.Tickets.Commands.ChangeTicketStatus;
+using SupportDesk.Application.Features.Tickets.Commands.EscalateTicket;
 using SupportDesk.Application.Features.Tickets.Commands.RaiseTicket;
 using SupportDesk.Application.Features.Tickets.Queries.GetTicket;
 using SupportDesk.Application.Features.Tickets.Triage;
@@ -51,6 +52,13 @@ internal sealed class TicketCommandTestContext
                 Category = new CategoryDto(1, "General", false)
             });
 
+        // The history as re-read after an escalation; an unsaved escalation still has id 0.
+        TicketQueries.Setup(q => q.GetEscalationsAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                new TicketEscalationDto(0, TicketPriority.Medium, TicketPriority.High, null, null,
+                    null, FixedClock.DefaultNow.AddHours(8), "Customer is losing sales.", "Sara Lindqvist", FixedClock.DefaultNow)
+            ]);
+
         var getTicket = new GetTicketQueryHandler(TicketQueries.Object);
 
         Triage = new TicketTriage(Agents.Object, new SlaWindowPolicy(ShippedSlaTerms));
@@ -58,6 +66,10 @@ internal sealed class TicketCommandTestContext
         RaiseTicket = new RaiseTicketCommandHandler(
             Tickets.Object, Customers.Object, Categories.Object, Triage, UnitOfWork.Object, Clock, getTicket,
             NullLogger<RaiseTicketCommandHandler>.Instance);
+
+        EscalateTicket = new EscalateTicketCommandHandler(
+            Tickets.Object, Customers.Object, Categories.Object, Triage, UnitOfWork.Object, Clock, getTicket,
+            TicketQueries.Object, NullLogger<EscalateTicketCommandHandler>.Instance);
 
         ChangeTicketStatus = new ChangeTicketStatusCommandHandler(Tickets.Object, UnitOfWork.Object, Clock, getTicket);
 
@@ -105,6 +117,8 @@ internal sealed class TicketCommandTestContext
     public TicketTriage Triage { get; }
 
     public RaiseTicketCommandHandler RaiseTicket { get; }
+
+    public EscalateTicketCommandHandler EscalateTicket { get; }
 
     public ChangeTicketStatusCommandHandler ChangeTicketStatus { get; }
 

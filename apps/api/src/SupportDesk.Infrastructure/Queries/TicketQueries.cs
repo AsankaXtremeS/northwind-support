@@ -41,6 +41,7 @@ public sealed class TicketQueries(SupportDbContext db, IClock clock, IOptions<Sl
     public Task<TicketDetailDto?> GetDetailAsync(int id, CancellationToken ct)
     {
         var slaStatus = CurrentSlaStatus();
+        var canEscalate = Ticket.CanEscalateRule;
 
         Expression<Func<TicketWithLabels, TicketDetailDto>> toDetail = x => new TicketDetailDto
         {
@@ -58,13 +59,45 @@ public sealed class TicketQueries(SupportDbContext db, IClock clock, IOptions<Sl
             UpdatedAtUtc = x.Ticket.UpdatedAtUtc,
             DueAtUtc = x.Ticket.DueAtUtc,
             ResolvedAtUtc = x.Ticket.ResolvedAtUtc,
-            SlaStatus = slaStatus.Inline(x.Ticket)
+            SlaStatus = slaStatus.Inline(x.Ticket),
+            CanEscalate = canEscalate.Inline(x.Ticket)
         };
 
         return TicketsWithLabels()
             .Where(x => x.Ticket.Id == id)
             .Select(toDetail.Expand())
             .FirstOrDefaultAsync(ct);
+    }
+
+    /// <remarks>
+    /// Agent names are joined in, in the same query. Newest first, with the id breaking ties so
+    /// two escalations in the same millisecond still come back in a stable order.
+    /// </remarks>
+    public async Task<IReadOnlyList<TicketEscalationDto>?> GetEscalationsAsync(int ticketId, CancellationToken ct)
+    {
+        if (!await db.Set<Ticket>().AnyAsync(t => t.Id == ticketId, ct))
+        {
+            return null;
+        }
+
+        return await (
+                from escalation in db.Set<TicketEscalation>().AsNoTracking()
+                where escalation.TicketId == ticketId
+                from fromAgent in db.Set<Agent>().Where(a => a.Id == escalation.FromAgentId).DefaultIfEmpty()
+                from toAgent in db.Set<Agent>().Where(a => a.Id == escalation.ToAgentId).DefaultIfEmpty()
+                orderby escalation.EscalatedAtUtc descending, escalation.Id descending
+                select new TicketEscalationDto(
+                    escalation.Id,
+                    escalation.FromPriority,
+                    escalation.ToPriority,
+                    fromAgent == null ? null : new AgentSummaryDto(fromAgent.Id, fromAgent.FullName),
+                    toAgent == null ? null : new AgentSummaryDto(toAgent.Id, toAgent.FullName),
+                    escalation.FromDueAtUtc,
+                    escalation.ToDueAtUtc,
+                    escalation.Reason,
+                    escalation.EscalatedBy,
+                    escalation.EscalatedAtUtc))
+            .ToListAsync(ct);
     }
 
     public async Task<IReadOnlyList<TicketListItemDto>> GetForCustomerAsync(int customerId, CancellationToken ct) =>
