@@ -291,14 +291,18 @@ textarea[aria-invalid='true'] {
   color: var(--colour-muted);
 }
 
-.sla-cell {
+.sla-indicator {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
 }
 
-.sla-cell__due {
+.sla-indicator__symbol {
+  margin-right: 4px;
+}
+
+.sla-indicator__due {
   font-size: 0.8rem;
   color: var(--colour-muted);
 }

@@ -31,6 +31,7 @@ function buildQuery(filters: TicketFilters): string {
   append('customerId', filters.customerId);
   append('assignedAgentId', filters.assignedAgentId);
   append('unassignedOnly', filters.unassignedOnly);
+  append('slaStatus', filters.slaStatus);
   append('sortBy', filters.sortBy);
   append('sortDirection', filters.sortDirection);
 

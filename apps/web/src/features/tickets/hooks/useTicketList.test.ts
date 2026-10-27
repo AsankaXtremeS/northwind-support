@@ -117,6 +117,7 @@ describe('useTicketList', () => {
       ['unassignedOnly', { unassignedOnly: true }, 'true'],
       ['sortBy', { sortBy: 'dueAtUtc' }, 'dueAtUtc'],
       ['sortDirection', { sortDirection: 'asc' }, 'asc'],
+      ['slaStatus', { slaStatus: 'AtRisk' }, 'AtRisk'],
     ])(
       'immediately sends a new request with %s when it changes on page 1',
       async (param, patch, expected) => {
