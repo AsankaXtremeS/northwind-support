@@ -1,5 +1,6 @@
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using SupportDesk.Application.Features.Agents.Queries.GetAgents;
 using SupportDesk.Application.Features.Categories.Queries.GetCategories;
 using SupportDesk.Application.Features.Customers.Queries.GetCustomer;
@@ -9,11 +10,13 @@ using SupportDesk.Application.Features.Tickets.Commands.ChangeTicketStatus;
 using SupportDesk.Application.Features.Tickets.Commands.RaiseTicket;
 using SupportDesk.Application.Features.Tickets.Queries.GetTicket;
 using SupportDesk.Application.Features.Tickets.Queries.SearchTickets;
+using SupportDesk.Application.Sla;
 
 namespace SupportDesk.Application;
 
 /// <summary>
-/// Registers the command and query handlers and the request validators.
+/// Registers the command and query handlers, the request validators and the SLA settings
+/// validator. Binding the <c>Sla</c> section is left to the host, which owns configuration.
 /// </summary>
 public static class DependencyInjection
 {
@@ -33,6 +36,8 @@ public static class DependencyInjection
         services.AddScoped<GetCategoriesQueryHandler>();
 
         services.AddValidatorsFromAssemblyContaining<RaiseTicketCommandHandler>(ServiceLifetime.Singleton);
+
+        services.AddSingleton<IValidateOptions<SlaOptions>, SlaOptionsValidator>();
 
         return services;
     }

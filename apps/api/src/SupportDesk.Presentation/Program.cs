@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using SupportDesk.Application;
+using SupportDesk.Application.Sla;
 using SupportDesk.Infrastructure;
 using SupportDesk.Presentation.Extensions;
 using SupportDesk.Presentation.Filters;
@@ -29,6 +30,11 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// Bad SLA settings stop the application here rather than producing wrong due dates later.
+builder.Services.AddOptions<SlaOptions>()
+    .Bind(builder.Configuration.GetSection(SlaOptions.SectionName))
+    .ValidateOnStart();
 
 var app = builder.Build();
 
