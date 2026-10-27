@@ -1,6 +1,8 @@
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using SupportDesk.Application.Auth;
+using SupportDesk.Application.Features.Auth.Login;
 using SupportDesk.Application.Features.Agents.Queries.GetAgents;
 using SupportDesk.Application.Features.Categories.Queries.GetCategories;
 using SupportDesk.Application.Features.Customers.Queries.GetCustomer;
@@ -19,8 +21,9 @@ using SupportDesk.Domain.Triage;
 namespace SupportDesk.Application;
 
 /// <summary>
-/// Registers the command and query handlers, the request validators and the SLA settings
-/// validator. Binding the <c>Sla</c> section is left to the host, which owns configuration.
+/// Registers the command and query handlers, the request validators and the SLA and token
+/// settings validators. Binding the <c>Sla</c> and <c>Jwt</c> sections is left to the host,
+/// which owns configuration.
 /// </summary>
 public static class DependencyInjection
 {
@@ -44,9 +47,12 @@ public static class DependencyInjection
 
         services.AddScoped<GetCategoriesQueryHandler>();
 
+        services.AddScoped<LoginCommandHandler>();
+
         services.AddValidatorsFromAssemblyContaining<RaiseTicketCommandHandler>(ServiceLifetime.Singleton);
 
         services.AddSingleton<IValidateOptions<SlaOptions>, SlaOptionsValidator>();
+        services.AddSingleton<IValidateOptions<JwtOptions>, JwtOptionsValidator>();
 
         return services;
     }

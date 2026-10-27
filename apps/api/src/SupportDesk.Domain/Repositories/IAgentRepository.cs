@@ -10,6 +10,9 @@ public interface IAgentRepository
 {
     Task<Agent?> GetByIdAsync(int id, CancellationToken ct);
 
+    /// <summary>The agent with this email, or null. Matching follows the database collation.</summary>
+    Task<Agent?> GetByEmailAsync(string email, CancellationToken ct);
+
     /// <summary>
     /// Every agent as a candidate for a ticket in <paramref name="categoryId"/>: whether they meet
     /// its specialist requirement and how many open tickets they hold, leaving out

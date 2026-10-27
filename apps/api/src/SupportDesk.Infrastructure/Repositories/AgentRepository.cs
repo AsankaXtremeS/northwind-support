@@ -17,6 +17,15 @@ public sealed class AgentRepository(SupportDbContext db) : IAgentRepository
             .FirstOrDefaultAsync(a => a.Id == id, ct);
 
     /// <summary>
+    /// Uses the unique email index. SQL Server's default collation is case-insensitive, so
+    /// "Sara.Lindqvist@..." finds the same agent.
+    /// </summary>
+    public Task<Agent?> GetByEmailAsync(string email, CancellationToken ct) =>
+        db.Set<Agent>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.Email == email, ct);
+
+    /// <summary>
     /// One SQL statement for every agent: the open-ticket count and the specialist check are
     /// correlated subqueries, so the cost does not grow with a query per agent. Inactive and
     /// full agents are included; deciding who is eligible is the assignment policy's job.

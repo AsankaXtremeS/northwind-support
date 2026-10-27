@@ -1,7 +1,10 @@
 using System.Text.Json.Serialization;
 using SupportDesk.Application;
+using SupportDesk.Application.Abstractions;
+using SupportDesk.Application.Auth;
 using SupportDesk.Application.Sla;
 using SupportDesk.Infrastructure;
+using SupportDesk.Presentation.Auth;
 using SupportDesk.Presentation.Extensions;
 using SupportDesk.Presentation.Filters;
 using SupportDesk.Presentation.Middleware;
@@ -35,6 +38,13 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddOptions<SlaOptions>()
     .Bind(builder.Configuration.GetSection(SlaOptions.SectionName))
     .ValidateOnStart();
+
+// A missing or short signing key stops the application here, not at the first sign-in.
+builder.Services.AddOptions<JwtOptions>()
+    .Bind(builder.Configuration.GetSection(JwtOptions.SectionName))
+    .ValidateOnStart();
+
+builder.Services.AddSingleton<ITokenIssuer, JwtTokenIssuer>();
 
 var app = builder.Build();
 
