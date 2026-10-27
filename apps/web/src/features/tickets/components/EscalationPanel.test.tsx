@@ -60,11 +60,11 @@ describe('EscalationPanel', () => {
     expect(screen.getByText('Say who is escalating.')).toBeInTheDocument();
   });
 
-  it('shows the API message when the escalation is refused', async () => {
+  it('shows the API message and leaves the ticket unchanged when the escalation is refused', async () => {
     escalate.mockRejectedValue(
       new ApiError(409, 'Ticket TCK-0012 is already Critical and cannot be escalated further.'),
     );
-    renderPanel();
+    const onEscalated = renderPanel();
 
     await userEvent.type(screen.getByLabelText('Reason'), 'Customer is blocked');
     await userEvent.type(screen.getByLabelText('Escalated by'), 'Dana');
@@ -73,6 +73,10 @@ describe('EscalationPanel', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Ticket TCK-0012 is already Critical and cannot be escalated further.',
     );
+    expect(onEscalated).not.toHaveBeenCalled();
+    // The form stays as typed, so the user can retry without retyping.
+    expect(screen.getByLabelText('Reason')).toHaveValue('Customer is blocked');
+    expect(screen.getByRole('button', { name: 'Escalate to Critical' })).toBeEnabled();
   });
 
   it('shows the API field errors next to the fields', async () => {
