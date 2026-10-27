@@ -6,8 +6,9 @@ namespace SupportDesk.Application.Contracts.Tickets;
 /// Filters, sorting and paging for the ticket list. Bound directly from the query string.
 /// </summary>
 /// <remarks>
-/// The web app already sends every filter below, but the API only sorts and pages so far: the
-/// filters are part of the contract and still have to be applied server-side.
+/// Every filter left empty is ignored; the ones supplied combine with AND. So
+/// <see cref="UnassignedOnly"/> together with an <see cref="AssignedAgentId"/> matches nothing
+/// and returns an empty page.
 /// </remarks>
 public sealed record TicketQuery
 {
@@ -17,7 +18,11 @@ public sealed record TicketQuery
 
     public int PageSize { get; init; } = 20;
 
-    /// <summary>Matches the ticket title, its reference, or the customer name.</summary>
+    /// <summary>
+    /// Trimmed, then matched as a substring of the ticket title, its reference, or the customer
+    /// name; blank is ignored. Partial references match too: "0042" finds TCK-0042, and would
+    /// also find TCK-10042.
+    /// </summary>
     public string? Search { get; init; }
 
     public TicketStatus? Status { get; init; }
