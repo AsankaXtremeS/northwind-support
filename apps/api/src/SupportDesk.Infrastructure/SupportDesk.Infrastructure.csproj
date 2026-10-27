@@ -3,7 +3,7 @@
   <!--
     Implements the domain's repositories and the application's abstractions with EF Core and
     SQL Server: the DbContext, mappings, migrations and seed data (Data/), repositories, read
-    queries and the system clock.
+    queries, the system clock and password hashing.
   -->
   <ItemGroup>
     <ProjectReference Include="../SupportDesk.Application/SupportDesk.Application.csproj" />
@@ -12,6 +12,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <!-- Only for PasswordHasher<T>; the assembly is not an ASP.NET Core one, so the layer rule holds. -->
+    <PackageReference Include="Microsoft.Extensions.Identity.Core" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>

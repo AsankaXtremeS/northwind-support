@@ -18,17 +18,40 @@ namespace SupportDesk.Infrastructure.Data;
 /// produces - a ticket's last update, its due date and its SLA window - are set through EF Core
 /// directly.
 /// </remarks>
-public sealed class SupportDbSeeder(SupportDbContext db, IClock clock, ILogger<SupportDbSeeder> logger)
+public sealed class SupportDbSeeder(
+    SupportDbContext db,
+    IClock clock,
+    IPasswordHasher passwordHasher,
+    ILogger<SupportDbSeeder> logger)
 {
-    /// <summary>Seeds the database, unless it already has tickets in it.</summary>
+    /// <summary>
+    /// The password every seeded agent signs in with. A local development fixture, not a real
+    /// credential: it is only ever used by this development seeder, and only its hash reaches the
+    /// database. Also documented in .env.example.
+    /// </summary>
+    public const string DevelopmentPassword = "LocalDevOnly-NotARealPassword-1";
+
+    /// <summary>
+    /// Seeds the demo data, unless the database already has tickets in it, then gives any agent
+    /// without a login the development password.
+    /// </summary>
     public async Task SeedAsync(CancellationToken ct = default)
     {
         if (await db.Set<Ticket>().AnyAsync(ct))
         {
             logger.LogInformation("Seed data already present; skipping.");
-            return;
+        }
+        else
+        {
+            await SeedDemoDataAsync(ct);
         }
 
+        // Separate from the demo data, so a database seeded before logins existed gets them too.
+        await SeedDevelopmentPasswordsAsync(ct);
+    }
+
+    private async Task SeedDemoDataAsync(CancellationToken ct)
+    {
         var now = clock.UtcNow;
 
         var categories = SeedCategories();
@@ -49,6 +72,32 @@ public sealed class SupportDbSeeder(SupportDbContext db, IClock clock, ILogger<S
         logger.LogInformation(
             "Seeded {Categories} categories, {Customers} customers, {Agents} agents and {Tickets} tickets.",
             categories.Count, customers.Count, agents.Count, await db.Set<Ticket>().CountAsync(ct));
+    }
+
+    /// <summary>
+    /// Hashes the development password for every agent that has no login yet, each with its own
+    /// salt. Agents that already have one are left alone. Inactive agents get one too: being
+    /// inactive is what stops them signing in, not a missing password.
+    /// </summary>
+    private async Task SeedDevelopmentPasswordsAsync(CancellationToken ct)
+    {
+        var agentsWithoutLogin = await db.Set<Agent>()
+            .Where(a => a.PasswordHash == null)
+            .ToListAsync(ct);
+
+        if (agentsWithoutLogin.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var agent in agentsWithoutLogin)
+        {
+            agent.SetPasswordHash(passwordHasher.Hash(DevelopmentPassword));
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        logger.LogInformation("Set the development password for {Agents} agents.", agentsWithoutLogin.Count);
     }
 
     private static List<Category> SeedCategories() =>
