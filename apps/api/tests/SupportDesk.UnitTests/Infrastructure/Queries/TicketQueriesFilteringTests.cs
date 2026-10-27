@@ -54,7 +54,7 @@ public sealed class TicketQueriesFilteringTests(ITestOutputHelper output) : IAsy
     }
 
     [Fact]
-    public async Task Priority_filter_returns_only_exact_matches()
+    public async Task GetPagedAsync_WithPriority_ReturnsOnlyExactMatches()
     {
         var result = await GetPagedAsync(new TicketQuery { Priority = TicketPriority.High });
 
@@ -62,7 +62,7 @@ public sealed class TicketQueriesFilteringTests(ITestOutputHelper output) : IAsy
     }
 
     [Fact]
-    public async Task Status_and_category_filters_combine_with_and()
+    public async Task GetPagedAsync_WithStatusAndCategory_CombinesThemWithAnd()
     {
         var result = await GetPagedAsync(new TicketQuery { Status = TicketStatus.Open, CategoryId = _billingId });
 
@@ -70,7 +70,7 @@ public sealed class TicketQueriesFilteringTests(ITestOutputHelper output) : IAsy
     }
 
     [Fact]
-    public async Task Customer_and_agent_filters_return_only_exact_matches()
+    public async Task GetPagedAsync_WithCustomerAndAgent_ReturnsOnlyExactMatches()
     {
         var result = await GetPagedAsync(new TicketQuery { CustomerId = _fabrikamId, AssignedAgentId = _saraId });
 
@@ -78,7 +78,7 @@ public sealed class TicketQueriesFilteringTests(ITestOutputHelper output) : IAsy
     }
 
     [Fact]
-    public async Task Search_matches_customer_name()
+    public async Task GetPagedAsync_WithSearch_MatchesTheCustomerName()
     {
         var result = await GetPagedAsync(new TicketQuery { Search = "Fabrikam" });
 
@@ -86,7 +86,7 @@ public sealed class TicketQueriesFilteringTests(ITestOutputHelper output) : IAsy
     }
 
     [Fact]
-    public async Task Search_matches_title()
+    public async Task GetPagedAsync_WithSearch_MatchesTheTitle()
     {
         var result = await GetPagedAsync(new TicketQuery { Search = "Invoice" });
 
@@ -96,7 +96,7 @@ public sealed class TicketQueriesFilteringTests(ITestOutputHelper output) : IAsy
     [Theory]
     [InlineData("TCK-0004")]
     [InlineData("0004")]
-    public async Task Search_matches_full_or_partial_reference(string search)
+    public async Task GetPagedAsync_WithSearch_MatchesAFullOrPartialReference(string search)
     {
         var result = await GetPagedAsync(new TicketQuery { Search = search });
 
@@ -104,7 +104,7 @@ public sealed class TicketQueriesFilteringTests(ITestOutputHelper output) : IAsy
     }
 
     [Fact]
-    public async Task Search_is_trimmed()
+    public async Task GetPagedAsync_WithPaddedSearch_TrimsIt()
     {
         var result = await GetPagedAsync(new TicketQuery { Search = "  Invoice  " });
 
@@ -115,7 +115,7 @@ public sealed class TicketQueriesFilteringTests(ITestOutputHelper output) : IAsy
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task Blank_search_is_ignored(string? search)
+    public async Task GetPagedAsync_WithBlankSearch_IgnoresIt(string? search)
     {
         var result = await GetPagedAsync(new TicketQuery { Search = search });
 
@@ -123,7 +123,7 @@ public sealed class TicketQueriesFilteringTests(ITestOutputHelper output) : IAsy
     }
 
     [Fact]
-    public async Task UnassignedOnly_returns_only_tickets_without_an_agent()
+    public async Task GetPagedAsync_WithUnassignedOnly_ReturnsOnlyTicketsWithoutAnAgent()
     {
         var result = await GetPagedAsync(new TicketQuery { UnassignedOnly = true });
 
@@ -132,7 +132,7 @@ public sealed class TicketQueriesFilteringTests(ITestOutputHelper output) : IAsy
     }
 
     [Fact]
-    public async Task UnassignedOnly_with_an_assigned_agent_returns_an_empty_page()
+    public async Task GetPagedAsync_WithUnassignedOnlyAndAnAgent_ReturnsAnEmptyPage()
     {
         var result = await GetPagedAsync(new TicketQuery { UnassignedOnly = true, AssignedAgentId = _saraId });
 
@@ -142,7 +142,7 @@ public sealed class TicketQueriesFilteringTests(ITestOutputHelper output) : IAsy
     }
 
     [Fact]
-    public async Task TotalCount_and_TotalPages_describe_the_filtered_set()
+    public async Task GetPagedAsync_WithAFilter_CountsAndPagesOnlyTheFilteredSet()
     {
         var firstPage = await GetPagedAsync(new TicketQuery { Search = "Fabrikam", PageSize = 2 });
         var secondPage = await GetPagedAsync(new TicketQuery { Search = "Fabrikam", PageSize = 2, Page = 2 });
