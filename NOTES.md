@@ -207,16 +207,6 @@ planning, reviewing diffs and explaining concepts.
 
 ---
 
-# For README / APPROACH.md later
-- Defect: root cause, fix, how to verify (reproduction steps above + `npm run test --workspace apps/web`).
-- Filtering: where applied, how SQL was checked, how to add the next filter.
-- Known limitations so far:
-  - Search uses leading-wildcard LIKE → scan; full-text search for large data.
-  - SQLite tests don't check SQL Server collation (verified manually).
-  - `System.Security.Cryptography.Pkcs` 9.0.11 vulnerability warning (pre-existing).
-
-
-
 # Task 2 – Escalation & Assignment
 
 ## Findings from investigation
@@ -228,8 +218,6 @@ planning, reviewing diffs and explaining concepts.
 - Create does not check Category.IsActive.
 - Seeder comment points to non-existent database/02_seed.sql (real: db/seed.sql).
 - Test naming mixed after Task 1 (snake_case vs repo's Method_Condition_Outcome).
-
-## Decisions (D1–D14)
 
 ## Task 2 design (approved)
 
@@ -370,7 +358,6 @@ Existing Repository, Unit of Work and one-handler-per-use-case structure unchang
 4+. Given one by one.
 
 
-
 ## Step 2 – SlaWindowMinutes
 - Stored the applied window (not the status) so AtRisk = "25% or less of THIS window left",
   and escalation can restart it. SLA status itself is still never stored (BR-8).
@@ -443,14 +430,6 @@ Existing Repository, Unit of Work and one-handler-per-use-case structure unchang
 - CHANGED: 409 test only checked the message; spec says "ticket unchanged" → added that assert.
 - Did NOT let it run the API against the dev DB without asking (migration writes data).
 
-## README todo (Task 2)
-- Why Sla moved to appsettings.json (BR-6 "or justify"): config for all envs, validated on start.
-- Index (TicketId, EscalatedAtUtc DESC) and why.
-- Known limitations: no rowversion → two escalations at once can both apply; manual assign skips
-  the specialist rule; SLA config change doesn't re-window existing tickets.
-
-
-
 # Task 3 – Login and authentication
 
 ## Decisions
@@ -494,19 +473,88 @@ Existing Repository, Unit of Work and one-handler-per-use-case structure unchang
 - Vite proxy: /login served, /api via proxy 401 without token, login 200.
 - Tests: dotnet 227 unit + 33 integration + 4 architecture, web 69. Lint + typecheck clean.
 - Mutation checks: no fallback policy → 15 integration tests fail; RequireAuth disabled → 4 web tests fail.
-- [ ] Browser check: sign in, reload, log out, open /tickets/12 signed out → login → back to /tickets/12.
 
 ## AI usage (Task 3)
 - Plan first with decisions + 3 questions (packages, AU-8 option, seed.sql); I answered, then step by step.
 - Checked current docs (Context7) for Swashbuckle 10 bearer setup and the EF test DbContext swap.
 - Mutation-tested the auth tests (they pass for the right reason).
 - CHANGED: test name with an extra underscore → renamed to Method_Condition_Outcome.
-- Placeholders Jwt__SigningKey / Seed__AgentPassword in .env.example commented out, so they can't
-  override the user secrets.
+- Later (Task 4): the plain-text dev password in the seeder and the dev signing key in
+  appsettings.Development.json were moved to config (Seed:AgentPassword, user secrets / .env).
 
-## README todo (Task 3)
-- Credential storage, hashing, token issue + storage, lifetime, production changes (real key from
-  a secret store, HTTPS, shorter lifetime + refresh/revocation if needed).
-- Dev login: any seeded agent email + the Seed:AgentPassword set in user secrets (Yuki inactive).
-- Known limitations: token valid until expiry after deactivation (only /me + login re-check);
-  no lockout/rate limiting; sessionStorage readable by XSS; CORS origins hard-coded.
+
+# Task 4 – Dockerise the API
+
+## Before starting (cleanup from the Task 1–3 review)
+- Seeder had the dev password as a constant → now `Seed:AgentPassword` from config. Unset → warning,
+  agents get no login. Tests use their own test-only passwords.
+- Dev JWT key was committed in appsettings.Development.json → removed. Host run: dotnet user-secrets
+  (UserSecretsId on the API project). Container: env var.
+
+## Steps (one per commit)
+1. `/health`: EF DbContext check, JSON body, 200/503, no exception text, open without a token.
+2. `DatabaseOptions` (MigrateOnStartup, SeedDemoData) instead of `IsDevelopment()`.
+3. Multi-stage Dockerfile + .dockerignore.
+4. compose `api` service + .env.example with working local values.
+5. Pinned System.Security.Cryptography.Pkcs 10.0.14 (NU1902/NU1903).
+6. Import order fix → `dotnet format --verify-no-changes` clean again (CI was red).
+
+## Decisions
+- Migrate/seed switched on by config, not the environment name. Container runs as **Production**
+  and still migrates + seeds an empty volume. Two flags because production may migrate but must never
+  seed demo data. appsettings.Development.json turns both on → `npm run api` same as before.
+- Rejected: running the container as Development to get migrations (also brings Swagger + dev config).
+- `/health`: `MapHealthChecks` + `.AllowAnonymous()` in one extension. Map, not `UseHealthChecks`,
+  because only endpoints get the fallback policy. Body = check name + status only (no exception, no
+  connection string).
+- Dockerfile: restore from the 4 src csproj + Directory.*.props + global.json, then copy source →
+  restore layer cached on code changes. Restore the Presentation csproj, not the .sln (that would need
+  the test projects). `aspnet:10.0`, `USER $APP_UID`, HTTP 8080, no certs.
+- Not the chiseled image: no shell → `docker compose exec api whoami` would fail.
+- `.dockerignore` excludes appsettings.Development.json (has the local sa password) → nothing secret
+  in the image. Checked: only appsettings.json in /app.
+- compose: explicit `environment:` with `${...}`, NOT `env_file` - .env's old localhost connection
+  string would be wrong inside the container. Connection string built from MSSQL_SA_PASSWORD with
+  `Server=sqlserver`.
+- Secrets required in compose (`${Jwt__SigningKey:?...}`), no defaults there. .env.example has working
+  values clearly marked as local fixtures → `cp .env.example .env` + `up` works with zero edits.
+- New `API_ENVIRONMENT` var (default Production) instead of reusing ASPNETCORE_ENVIRONMENT from .env,
+  which said Development.
+- Pkcs: comes in via Microsoft.Data.SqlClient 6.1.6 (asks for 9.0.11). Fixed in 9.0.21 / 10.0.13.
+  Took 10.0.14 = same as the runtime in the image. Central transitive pinning was already on → one line.
+- Real deployment: migration bundle or idempotent script as its own pipeline step (replicas would race,
+  failed migration = one failed step not a crash loop, reviewable, app runs without DDL rights).
+
+## Verification
+- `docker compose down -v && up --build` (fresh volume): 5 migrations applied, seeded 40 tickets,
+  passwords set for 6 agents, "Hosting environment: Production".
+- `/health` → 200 `{"status":"Healthy","checks":{"database":"Healthy"}}`. No token → 401 on /api/tickets.
+- Sara login → token → /api/tickets totalCount 40. Yuki → 401.
+- `docker compose exec api whoami` → `app` (uid 1654).
+- Changed one .cs, rebuilt → `RUN dotnet restore` CACHED.
+- Image 457 MB vs SDK 1.31 GB.
+- Vite with VITE_API_PROXY_TARGET=http://localhost:5080 → login 200 through the proxy.
+- Empty env file → compose stops: "required variable Jwt__SigningKey is missing a value".
+- Unreachable DB in a test → /health 503, body has no exception text.
+- Mutation: removed AllowAnonymous → both health tests fail.
+- Also proves the Task 2 item "migration applies cleanly to an empty database".
+- Tests: dotnet 229 unit + 35 integration + 4 architecture. dotnet build 0 warnings. format clean.
+
+## Gotcha found
+- compose interpolates the WHOLE file → `npm run db:up` (sqlserver only) also fails without the
+  secrets in .env. Kept it (cp .env.example .env is step 1 anyway), written in README.
+- Restart with an EXISTING volume crashed the API: SQL Server accepted logins (healthcheck `SELECT 1`
+  passed) while SupportDesk was still recovering → EF thought the DB was missing → CREATE DATABASE →
+  "already exists" → crash. My earlier checks missed it (fresh volume / warm server).
+  Fix: healthcheck also requires SupportDesk to be ONLINE if it exists (`sqlcmd -b` + RAISERROR).
+  Checked: 3× stop/up → API healthy each time; missing DB still counts as healthy (fresh volume).
+
+## AI usage (Task 4)
+- Investigation report first (9 questions, file paths), then proposal, then I approved with answers.
+- CHANGED: proposed Dockerfile had `ENV ASPNETCORE_HTTP_PORTS=8080  # ...` - Docker only treats `#`
+  at line start as a comment, so the value would break. I made it put comments on their own lines.
+- CHANGED: I required working local values in .env.example (it proposed required secrets with no
+  example values → `up` would fail on a fresh clone).
+- Bug AI introduced: Python script wrote CRLF line endings → `dotnet format` failed; fixed to LF.
+- It asked before `docker compose down -v` (wipes my local DB volume). I said yes.
+- Checked Docker/.NET docs via Context7 (port 8080 default, DbContext health check package).
