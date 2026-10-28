@@ -3,6 +3,7 @@ using Microsoft.OpenApi;
 using SupportDesk.Application;
 using SupportDesk.Application.Sla;
 using SupportDesk.Infrastructure;
+using SupportDesk.Infrastructure.Data;
 using SupportDesk.Presentation.Auth;
 using SupportDesk.Presentation.Extensions;
 using SupportDesk.Presentation.Filters;
@@ -51,6 +52,9 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddOptions<SlaOptions>()
     .Bind(builder.Configuration.GetSection(SlaOptions.SectionName))
     .ValidateOnStart();
+
+builder.Services.AddOptions<SeedOptions>()
+    .Bind(builder.Configuration.GetSection(SeedOptions.SectionName));
 
 builder.Services.AddTokenAuthentication(builder.Configuration);
 

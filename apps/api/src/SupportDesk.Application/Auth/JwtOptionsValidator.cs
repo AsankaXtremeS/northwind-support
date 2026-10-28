@@ -29,8 +29,8 @@ public sealed class JwtOptionsValidator : IValidateOptions<JwtOptions>
         if (string.IsNullOrWhiteSpace(options.SigningKey))
         {
             failures.Add(
-                $"{JwtOptions.SectionName}:SigningKey is required. Set it in appsettings.Development.json " +
-                "locally or with the Jwt__SigningKey environment variable. See .env.example.");
+                $"{JwtOptions.SectionName}:SigningKey is required. Set it with dotnet user-secrets " +
+                "locally or with the Jwt__SigningKey environment variable. See README.md.");
         }
         else if (Encoding.UTF8.GetByteCount(options.SigningKey) < JwtOptions.MinimumSigningKeyBytes)
         {

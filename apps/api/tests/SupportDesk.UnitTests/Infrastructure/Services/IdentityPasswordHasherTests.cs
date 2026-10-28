@@ -4,7 +4,7 @@ namespace SupportDesk.UnitTests.Infrastructure.Services;
 
 public sealed class IdentityPasswordHasherTests
 {
-    private const string Password = "LocalDevOnly-NotARealPassword-1";
+    private const string Password = "unit-tests-only-password";
 
     private readonly IdentityPasswordHasher _hasher = new();
 
@@ -17,8 +17,8 @@ public sealed class IdentityPasswordHasherTests
     }
 
     [Theory]
-    [InlineData("LocalDevOnly-NotARealPassword-2")]
-    [InlineData("localdevonly-notarealpassword-1")]
+    [InlineData("unit-tests-only-password-2")]
+    [InlineData("UNIT-TESTS-ONLY-PASSWORD")]
     [InlineData("")]
     public void Verify_WrongPassword_ReturnsFalse(string attempt)
     {

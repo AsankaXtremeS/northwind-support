@@ -2,8 +2,9 @@ namespace SupportDesk.Application.Auth;
 
 /// <summary>
 /// How sign-in tokens are issued and checked, bound from the <c>Jwt</c> section of configuration.
-/// The signing key is never in source: it comes from appsettings.Development.json locally and
-/// from the <c>Jwt__SigningKey</c> environment variable elsewhere. Checked at startup by
+/// The signing key is never in source or in any committed file: it comes from
+/// <c>dotnet user-secrets</c> locally and from the <c>Jwt__SigningKey</c> environment variable
+/// elsewhere. Checked at startup by
 /// <see cref="JwtOptionsValidator"/>.
 /// </summary>
 public sealed class JwtOptions

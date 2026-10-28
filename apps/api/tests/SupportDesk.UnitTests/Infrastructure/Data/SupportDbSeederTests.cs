@@ -1,6 +1,7 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using SupportDesk.Domain.Aggregates.Agents;
 using SupportDesk.Domain.Aggregates.Tickets;
 using SupportDesk.Infrastructure.Data;
@@ -15,6 +16,8 @@ namespace SupportDesk.UnitTests.Infrastructure.Data;
 /// </summary>
 public sealed class SupportDbSeederTests : IAsyncLifetime
 {
+    private const string AgentPassword = "unit-tests-only-password";
+
     private readonly SqliteConnection _connection = new("DataSource=:memory:");
     private readonly IdentityPasswordHasher _hasher = new();
     private SupportDbContext _db = null!;
@@ -34,11 +37,16 @@ public sealed class SupportDbSeederTests : IAsyncLifetime
         await _connection.DisposeAsync();
     }
 
-    private SupportDbSeeder Seeder() =>
-        new(_db, new FixedClock(new DateTime(2026, 10, 27, 12, 0, 0, DateTimeKind.Utc)), _hasher, NullLogger<SupportDbSeeder>.Instance);
+    private SupportDbSeeder Seeder(string agentPassword = AgentPassword) =>
+        new(
+            _db,
+            new FixedClock(new DateTime(2026, 10, 27, 12, 0, 0, DateTimeKind.Utc)),
+            _hasher,
+            Options.Create(new SeedOptions { AgentPassword = agentPassword }),
+            NullLogger<SupportDbSeeder>.Instance);
 
     [Fact]
-    public async Task SeedAsync_EmptyDatabase_GivesEveryAgentAHashOfTheDevelopmentPassword()
+    public async Task SeedAsync_EmptyDatabase_GivesEveryAgentAHashOfTheConfiguredPassword()
     {
         await Seeder().SeedAsync();
 
@@ -48,8 +56,8 @@ public sealed class SupportDbSeederTests : IAsyncLifetime
         Assert.All(agents, agent =>
         {
             Assert.NotNull(agent.PasswordHash);
-            Assert.NotEqual(SupportDbSeeder.DevelopmentPassword, agent.PasswordHash);
-            Assert.True(_hasher.Verify(agent.PasswordHash, SupportDbSeeder.DevelopmentPassword));
+            Assert.NotEqual(AgentPassword, agent.PasswordHash);
+            Assert.True(_hasher.Verify(agent.PasswordHash, AgentPassword));
         });
 
         // Each agent has its own salt.
@@ -69,7 +77,7 @@ public sealed class SupportDbSeederTests : IAsyncLifetime
         var agents = await _db.Set<Agent>().AsNoTracking().ToListAsync();
         Assert.Equal(6, agents.Count);
         Assert.Equal(ticketCount, await _db.Set<Ticket>().CountAsync());
-        Assert.All(agents, agent => Assert.True(_hasher.Verify(agent.PasswordHash!, SupportDbSeeder.DevelopmentPassword)));
+        Assert.All(agents, agent => Assert.True(_hasher.Verify(agent.PasswordHash!, AgentPassword)));
     }
 
     [Fact]
@@ -97,5 +105,18 @@ public sealed class SupportDbSeederTests : IAsyncLifetime
 
         Assert.False(yuki.IsActive);
         Assert.NotNull(yuki.PasswordHash);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task SeedAsync_NoPasswordConfigured_SeedsAgentsWithoutALogin(string agentPassword)
+    {
+        await Seeder(agentPassword).SeedAsync();
+
+        var agents = await _db.Set<Agent>().AsNoTracking().ToListAsync();
+
+        Assert.Equal(6, agents.Count);
+        Assert.All(agents, agent => Assert.Null(agent.PasswordHash));
     }
 }

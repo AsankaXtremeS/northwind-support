@@ -1,6 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <!-- The Web API and composition root. Maps HTTP to the application's commands and queries. -->
+  <PropertyGroup>
+    <!-- Local secrets (signing key, seed password) live in the user's profile, never in the repo. -->
+    <UserSecretsId>supportdesk-api-7c1e9a52-3f4d-4b8e-9a61-2d5f0c8e4b17</UserSecretsId>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="../SupportDesk.Application/SupportDesk.Application.csproj" />
     <ProjectReference Include="../SupportDesk.Infrastructure/SupportDesk.Infrastructure.csproj" />

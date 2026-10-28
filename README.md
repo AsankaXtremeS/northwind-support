@@ -48,6 +48,11 @@ Full requirements are in **[`ASSIGNMENT_CANDIDATE.md`](ASSIGNMENT_CANDIDATE.md)*
 ```bash
 cp .env.example .env          # optional, every value has a working default
 npm install                   # installs the web app
+
+# One-off: local secrets, kept in your user profile - never in the repo
+dotnet user-secrets set Jwt:SigningKey "$(openssl rand -base64 48)" --project apps/api/src/SupportDesk.Presentation
+dotnet user-secrets set Seed:AgentPassword "<choose a local password>" --project apps/api/src/SupportDesk.Presentation
+
 npm run db:up                 # SQL Server 2022 in Docker on localhost:1433
 npm run api                   # terminal 1: migrates, seeds, then serves the API
 npm run web                   # terminal 2: React dev server
@@ -61,6 +66,11 @@ npm run web                   # terminal 2: React dev server
 
 In Development the API applies migrations and seeds demo data on startup. **Never commit real
 credentials.**
+
+**Signing in:** any seeded agent's email (e.g. `sara.lindqvist@northwind-support.example`) with the
+`Seed:AgentPassword` you set above. The seeder only sets a password for agents that have none, so
+on a database seeded earlier run `npm run db:reset` to pick up a new one. Yuki Tanaka is inactive
+and cannot sign in. Without `Jwt:SigningKey` the API refuses to start.
 
 **Visual Studio 2026:** run `npm run db:up`, open `SupportDesk.sln`, set
 **SupportDesk.Presentation** as the startup project, and press F5 on the **https** profile.

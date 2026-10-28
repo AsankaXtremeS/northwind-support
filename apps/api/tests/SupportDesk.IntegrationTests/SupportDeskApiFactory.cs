@@ -22,6 +22,9 @@ public sealed class SupportDeskApiFactory : WebApplicationFactory<Program>, IAsy
     /// <summary>Test-only key, also used by tests that forge tokens.</summary>
     public const string SigningKey = "integration-tests-only-signing-key-not-a-secret";
 
+    /// <summary>Test-only password the seeder gives every agent.</summary>
+    public const string AgentPassword = "integration-tests-only-password";
+
     public const string SaraEmail = "sara.lindqvist@northwind-support.example";
     public const string YukiEmail = "yuki.tanaka@northwind-support.example";
 
@@ -35,6 +38,7 @@ public sealed class SupportDeskApiFactory : WebApplicationFactory<Program>, IAsy
         // Read before the services below replace the database, so it only has to exist.
         builder.UseSetting("ConnectionStrings:Default", "unused - replaced by SQLite");
         builder.UseSetting("Jwt:SigningKey", SigningKey);
+        builder.UseSetting("Seed:AgentPassword", AgentPassword);
 
         builder.ConfigureServices(services =>
         {
@@ -59,8 +63,8 @@ public sealed class SupportDeskApiFactory : WebApplicationFactory<Program>, IAsy
         await _connection.DisposeAsync();
     }
 
-    /// <summary>Signs in through the real endpoint, with the development password.</summary>
-    public Task<HttpResponseMessage> LoginAsync(string email, string password = SupportDbSeeder.DevelopmentPassword) =>
+    /// <summary>Signs in through the real endpoint, with the seeded password.</summary>
+    public Task<HttpResponseMessage> LoginAsync(string email, string password = AgentPassword) =>
         CreateClient().PostAsJsonAsync("/api/auth/login", new LoginRequest(email, password));
 
     /// <summary>A client carrying Sara's token, obtained by actually signing in.</summary>

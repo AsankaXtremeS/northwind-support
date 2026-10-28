@@ -120,7 +120,7 @@ describe('signing in', () => {
     respondToLogin(200, sara);
     const router = renderApp('/tickets/12');
 
-    await fillIn('sara.lindqvist@northwind-support.example', 'LocalDevOnly-NotARealPassword-1');
+    await fillIn('sara.lindqvist@northwind-support.example', 'web-tests-only-password');
 
     expect(await screen.findByText('Ticket TCK-0012')).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/tickets/12');
@@ -131,7 +131,7 @@ describe('signing in', () => {
     respondToLogin(200, sara);
     const router = renderApp('/login');
 
-    await fillIn('sara.lindqvist@northwind-support.example', 'LocalDevOnly-NotARealPassword-1');
+    await fillIn('sara.lindqvist@northwind-support.example', 'web-tests-only-password');
 
     expect(await screen.findByText('Ticket list')).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/tickets');
@@ -166,7 +166,7 @@ describe('signing in', () => {
     fetchMock.mockImplementation(() => new Promise<Response>((resolve) => (finish = resolve)));
     renderApp('/login');
 
-    await fillIn('sara.lindqvist@northwind-support.example', 'LocalDevOnly-NotARealPassword-1');
+    await fillIn('sara.lindqvist@northwind-support.example', 'web-tests-only-password');
 
     expect(screen.getByRole('button', { name: 'Signing in...' })).toBeDisabled();
     finish(new Response(JSON.stringify(sara), { status: 200 }));
@@ -220,7 +220,7 @@ describe('when signed in', () => {
     await screen.findByRole('heading', { name: 'Sign in' });
 
     respondToLogin(200, sara);
-    await fillIn('sara.lindqvist@northwind-support.example', 'LocalDevOnly-NotARealPassword-1');
+    await fillIn('sara.lindqvist@northwind-support.example', 'web-tests-only-password');
 
     expect(await screen.findByText('Ticket TCK-0012')).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/tickets/12');

@@ -12,7 +12,7 @@ namespace SupportDesk.UnitTests.Application.Features.Auth;
 public sealed class LoginCommandHandlerTests
 {
     private const string SaraEmail = "sara.lindqvist@northwind-support.example";
-    private const string Password = "LocalDevOnly-NotARealPassword-1";
+    private const string Password = "unit-tests-only-password";
 
     private static readonly DateTime ExpiresAtUtc = new(2026, 10, 27, 20, 0, 0, DateTimeKind.Utc);
 

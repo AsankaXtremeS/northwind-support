@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using SupportDesk.Application.Abstractions;
 using SupportDesk.Domain.Aggregates.Agents;
 using SupportDesk.Domain.Aggregates.Categories;
@@ -22,18 +23,12 @@ public sealed class SupportDbSeeder(
     SupportDbContext db,
     IClock clock,
     IPasswordHasher passwordHasher,
+    IOptions<SeedOptions> seedOptions,
     ILogger<SupportDbSeeder> logger)
 {
     /// <summary>
-    /// The password every seeded agent signs in with. A local development fixture, not a real
-    /// credential: it is only ever used by this development seeder, and only its hash reaches the
-    /// database. Also documented in .env.example.
-    /// </summary>
-    public const string DevelopmentPassword = "LocalDevOnly-NotARealPassword-1";
-
-    /// <summary>
     /// Seeds the demo data, unless the database already has tickets in it, then gives any agent
-    /// without a login the development password.
+    /// without a login the configured <see cref="SeedOptions.AgentPassword"/>.
     /// </summary>
     public async Task SeedAsync(CancellationToken ct = default)
     {
@@ -75,12 +70,23 @@ public sealed class SupportDbSeeder(
     }
 
     /// <summary>
-    /// Hashes the development password for every agent that has no login yet, each with its own
+    /// Hashes the configured password for every agent that has no login yet, each with its own
     /// salt. Agents that already have one are left alone. Inactive agents get one too: being
-    /// inactive is what stops them signing in, not a missing password.
+    /// inactive is what stops them signing in, not a missing password. The password comes from
+    /// configuration, so no plain-text password is ever in source.
     /// </summary>
     private async Task SeedDevelopmentPasswordsAsync(CancellationToken ct)
     {
+        var password = seedOptions.Value.AgentPassword;
+
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            logger.LogWarning(
+                "{Setting} is not set, so agents without a login get none. See README.md.",
+                $"{SeedOptions.SectionName}:{nameof(SeedOptions.AgentPassword)}");
+            return;
+        }
+
         var agentsWithoutLogin = await db.Set<Agent>()
             .Where(a => a.PasswordHash == null)
             .ToListAsync(ct);
@@ -92,7 +98,7 @@ public sealed class SupportDbSeeder(
 
         foreach (var agent in agentsWithoutLogin)
         {
-            agent.SetPasswordHash(passwordHasher.Hash(DevelopmentPassword));
+            agent.SetPasswordHash(passwordHasher.Hash(password));
         }
 
         await db.SaveChangesAsync(ct);

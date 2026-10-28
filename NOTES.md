@@ -462,14 +462,16 @@ Existing Repository, Unit of Work and one-handler-per-use-case structure unchang
 - Same 401 + same message for unknown email / wrong password / inactive / no password.
   Unknown email still runs one hash → timing doesn't leak which emails exist. Reason only in the log (agent id, never the email).
 - JWT HS256, lifetime 8 h (one shift), no refresh token (not wanted). ClockSkew 30 s (default 5 min).
-- Signing key: not in .cs, not in appsettings.json. Dev key in appsettings.Development.json (obviously fake),
-  elsewhere Jwt__SigningKey. ValidateOnStart: no key or < 32 bytes → app won't start.
+- Signing key: not in any committed file. Locally in dotnet user-secrets (UserSecretsId on the API
+  project), elsewhere Jwt__SigningKey. ValidateOnStart: no key or < 32 bytes → app won't start.
 - Fallback policy RequireAuthenticatedUser → every endpoint closed, only login has [AllowAnonymous].
   Swagger is middleware, not an endpoint → stays open (Authorize button added).
 - /me reads the agent from the DB → deactivated agent gets 401 there.
 - AU-8: escalatedBy from the token. New EscalatedByAgentId FK + name snapshot in EscalatedBy.
   EscalatedBy widened 100 → 200 (= Agents.FullName). Old rows: AgentId NULL, typed name kept.
-- Dev seeding: passwords set for any agent with NULL hash, even on an already seeded DB.
+- Dev seeding: passwords set for any agent with NULL hash, even on an already seeded DB. The password
+  comes from Seed:AgentPassword (user secrets / env), so no plain-text password is in source; unset →
+  warning, agents get no login. Tests use their own test-only values.
   seed.sql leaves PasswordHash NULL (hashing happens in the seeder only).
 - Web token in sessionStorage: survives refresh, not shared across tabs, gone on tab close.
   Trade-off: XSS can read it. httpOnly cookie avoids that but needs cookie auth + CSRF → more than needed.
@@ -499,11 +501,12 @@ Existing Repository, Unit of Work and one-handler-per-use-case structure unchang
 - Checked current docs (Context7) for Swashbuckle 10 bearer setup and the EF test DbContext swap.
 - Mutation-tested the auth tests (they pass for the right reason).
 - CHANGED: test name with an extra underscore → renamed to Method_Condition_Outcome.
-- Placeholder Jwt__SigningKey in .env.example commented out, so it can't override the dev key.
+- Placeholders Jwt__SigningKey / Seed__AgentPassword in .env.example commented out, so they can't
+  override the user secrets.
 
 ## README todo (Task 3)
 - Credential storage, hashing, token issue + storage, lifetime, production changes (real key from
   a secret store, HTTPS, shorter lifetime + refresh/revocation if needed).
-- Dev login: any seeded agent email + LocalDevOnly-NotARealPassword-1 (Yuki inactive).
+- Dev login: any seeded agent email + the Seed:AgentPassword set in user secrets (Yuki inactive).
 - Known limitations: token valid until expiry after deactivation (only /me + login re-check);
   no lockout/rate limiting; sessionStorage readable by XSS; CORS origins hard-coded.
