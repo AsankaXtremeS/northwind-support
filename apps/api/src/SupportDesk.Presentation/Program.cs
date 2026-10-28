@@ -56,6 +56,9 @@ builder.Services.AddOptions<SlaOptions>()
 builder.Services.AddOptions<SeedOptions>()
     .Bind(builder.Configuration.GetSection(SeedOptions.SectionName));
 
+builder.Services.AddOptions<DatabaseOptions>()
+    .Bind(builder.Configuration.GetSection(DatabaseOptions.SectionName));
+
 builder.Services.AddTokenAuthentication(builder.Configuration);
 builder.Services.AddApiHealthChecks();
 
@@ -67,10 +70,11 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
-
-    // Keeps a developer machine one command away from a working database.
-    await app.MigrateAndSeedAsync();
 }
+
+// Switched on by configuration (Database:MigrateOnStartup / SeedDemoData), not by the environment
+// name: on for local runs and the container, off for a real deployment, which migrates separately.
+await app.PrepareDatabaseAsync();
 
 app.UseCors(FrontendCorsPolicy);
 
