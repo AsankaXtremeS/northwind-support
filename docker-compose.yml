@@ -1,5 +1,7 @@
-# SQL Server for local development only. The password below is a throwaway local
-# placeholder - never commit a real credential.
+# Local development only. Values come from .env (cp .env.example .env); every default and
+# example value is a throwaway local placeholder - never commit a real credential.
+#   docker compose up --build        SQL Server + the API on http://localhost:5080
+#   npm run db:up                    SQL Server only, for running the API on the host
 services:
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -22,6 +24,27 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: supportdesk-api
+    ports:
+      - "5080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: "${API_ENVIRONMENT:-Production}"
+      # SQL Server by its service name on the compose network, not localhost.
+      ConnectionStrings__Default: "Server=sqlserver,1433;Database=SupportDesk;User Id=sa;Password=${MSSQL_SA_PASSWORD:-Local_Dev_Password1};TrustServerCertificate=True;Encrypt=False"
+      # No defaults for secrets: `up` stops with this message until .env provides them.
+      Jwt__SigningKey: "${Jwt__SigningKey:?Set Jwt__SigningKey in .env - cp .env.example .env}"
+      Seed__AgentPassword: "${Seed__AgentPassword:?Set Seed__AgentPassword in .env - cp .env.example .env}"
+      # An empty volume gets the schema and the demo data on first start.
+      Database__MigrateOnStartup: "true"
+      Database__SeedDemoData: "true"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
 
 volumes:
   supportdesk-sql:
