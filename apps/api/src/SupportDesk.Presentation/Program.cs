@@ -57,6 +57,7 @@ builder.Services.AddOptions<SeedOptions>()
     .Bind(builder.Configuration.GetSection(SeedOptions.SectionName));
 
 builder.Services.AddTokenAuthentication(builder.Configuration);
+builder.Services.AddApiHealthChecks();
 
 var app = builder.Build();
 
@@ -77,6 +78,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapApiHealthChecks();
 
 app.Run();
 
