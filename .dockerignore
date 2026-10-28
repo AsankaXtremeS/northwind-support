@@ -1,0 +1,34 @@
+# Keeps the build context small and free of local state and secrets.
+# The API image is built from the repo root: docker build -f apps/api/Dockerfile .
+
+# Build output and dependencies
+**/bin/
+**/obj/
+**/node_modules/
+**/TestResults/
+
+# Source control, CI and editor state
+.git/
+.github/
+.vs/
+.vscode/
+.idea/
+.config/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+**/*.user
+**/secrets.json
+
+# Development-only settings (they hold the local sa password) - never in the image
+**/appsettings.Development.json
+
+# Not part of the API image
+apps/web/
+apps/api/tests/
+db/
+spec/
+*.md
+*.pdf
