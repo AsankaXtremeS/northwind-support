@@ -1,0 +1,111 @@
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ApiError } from '../../../api/client';
+import { ticketsApi } from '../../../api/tickets';
+import { ticketDetail, ticketEscalation } from '../../../test/fixtures';
+import type { TicketDetail } from '../../../types/api';
+import { EscalationPanel } from './EscalationPanel';
+
+vi.mock('../../../api/tickets', () => ({
+  ticketsApi: {
+    escalate: vi.fn(),
+  },
+}));
+
+const escalate = vi.mocked(ticketsApi.escalate);
+
+function renderPanel(ticket: TicketDetail = ticketDetail()) {
+  const onEscalated = vi.fn();
+  render(<EscalationPanel ticket={ticket} onEscalated={onEscalated} />);
+
+  return onEscalated;
+}
+
+describe('EscalationPanel', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('offers to escalate to the next priority', () => {
+    renderPanel(ticketDetail({ priority: 'Medium' }));
+
+    expect(screen.getByRole('button', { name: 'Escalate to High' })).toBeInTheDocument();
+  });
+
+  it('sends only the trimmed reason, then hands the response back', async () => {
+    const escalated = {
+      ticket: ticketDetail({ priority: 'Critical', canEscalate: false }),
+      escalation: ticketEscalation(),
+    };
+    escalate.mockResolvedValue(escalated);
+    const onEscalated = renderPanel();
+
+    await userEvent.type(screen.getByLabelText('Reason'), '  Customer is blocked  ');
+    await userEvent.click(screen.getByRole('button', { name: 'Escalate to Critical' }));
+
+    // No name: the API records the signed-in agent.
+    expect(escalate).toHaveBeenCalledWith(12, { reason: 'Customer is blocked' });
+    expect(onEscalated).toHaveBeenCalledWith(escalated);
+  });
+
+  it('does not call the API when the trimmed reason is too short', async () => {
+    renderPanel();
+
+    await userEvent.type(screen.getByLabelText('Reason'), '  abc   ');
+    await userEvent.click(screen.getByRole('button', { name: 'Escalate to Critical' }));
+
+    expect(escalate).not.toHaveBeenCalled();
+    expect(screen.getByText('Give a reason of 5 to 500 characters.')).toBeInTheDocument();
+  });
+
+  it('has no field for who is escalating', () => {
+    renderPanel();
+
+    expect(screen.queryByLabelText('Escalated by')).not.toBeInTheDocument();
+  });
+
+  it('shows the API message and leaves the ticket unchanged when the escalation is refused', async () => {
+    escalate.mockRejectedValue(
+      new ApiError(409, 'Ticket TCK-0012 is already Critical and cannot be escalated further.'),
+    );
+    const onEscalated = renderPanel();
+
+    await userEvent.type(screen.getByLabelText('Reason'), 'Customer is blocked');
+    await userEvent.click(screen.getByRole('button', { name: 'Escalate to Critical' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Ticket TCK-0012 is already Critical and cannot be escalated further.',
+    );
+    expect(onEscalated).not.toHaveBeenCalled();
+    // The form stays as typed, so the user can retry without retyping.
+    expect(screen.getByLabelText('Reason')).toHaveValue('Customer is blocked');
+    expect(screen.getByRole('button', { name: 'Escalate to Critical' })).toBeEnabled();
+  });
+
+  it('shows the API field errors next to the fields', async () => {
+    escalate.mockRejectedValue(
+      new ApiError(400, 'One or more validation errors occurred.', {
+        errors: { Reason: ['Give a reason of 5 to 500 characters.'] },
+      }),
+    );
+    renderPanel();
+
+    await userEvent.type(screen.getByLabelText('Reason'), 'Customer is blocked');
+    await userEvent.click(screen.getByRole('button', { name: 'Escalate to Critical' }));
+
+    expect(await screen.findByText('Give a reason of 5 to 500 characters.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Reason')).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it.each<[string, Partial<TicketDetail>, string]>([
+    ['Critical', { priority: 'Critical', canEscalate: false }, 'already Critical'],
+    ['Resolved', { status: 'Resolved', canEscalate: false }, 'resolved, so it cannot be escalated'],
+    ['Closed', { status: 'Closed', canEscalate: false }, 'closed, so it cannot be escalated'],
+  ])('explains why a %s ticket cannot be escalated, with no form', (_, overrides, message) => {
+    renderPanel(ticketDetail(overrides));
+
+    expect(screen.getByText(new RegExp(message))).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+});

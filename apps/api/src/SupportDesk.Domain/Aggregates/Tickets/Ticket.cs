@@ -1,5 +1,7 @@
+using System.Linq.Expressions;
 using SupportDesk.Domain.Common;
 using SupportDesk.Domain.Exceptions;
+using SupportDesk.Domain.Triage;
 
 namespace SupportDesk.Domain.Aggregates.Tickets;
 
@@ -13,6 +15,8 @@ namespace SupportDesk.Domain.Aggregates.Tickets;
 /// </remarks>
 public sealed class Ticket : AggregateRoot
 {
+    private readonly List<TicketEscalation> _escalations = [];
+
     private Ticket()
     {
         // For EF Core.
@@ -43,10 +47,35 @@ public sealed class Ticket : AggregateRoot
     /// <summary>When the team has committed to responding by. Null when no SLA applies.</summary>
     public DateTime? DueAtUtc { get; private set; }
 
+    /// <summary>
+    /// The length of the SLA window <see cref="DueAtUtc"/> was set from, in minutes. Kept because
+    /// the window restarts on escalation, so it cannot be worked out from the creation time.
+    /// Null when no SLA applies.
+    /// </summary>
+    public int? SlaWindowMinutes { get; private set; }
+
     public DateTime? ResolvedAtUtc { get; private set; }
 
     /// <summary>True while the ticket still needs work from an agent.</summary>
     public bool IsOpen => Status is not (TicketStatus.Resolved or TicketStatus.Closed);
+
+    /// <summary>
+    /// Whether the ticket can be escalated: still open and not already Critical. One definition,
+    /// used here and translated to SQL where the read side reports it.
+    /// </summary>
+    public static Expression<Func<Ticket, bool>> CanEscalateRule { get; } = ticket =>
+        ticket.Status != TicketStatus.Resolved &&
+        ticket.Status != TicketStatus.Closed &&
+        ticket.Priority != TicketPriority.Critical;
+
+    // Declared after the rule: static initializers run in order, so the rule must exist first.
+    private static readonly Func<Ticket, bool> CanEscalateCompiled = CanEscalateRule.Compile();
+
+    /// <inheritdoc cref="CanEscalateRule"/>
+    public bool CanEscalate => CanEscalateCompiled(this);
+
+    /// <summary>Every escalation recorded against the ticket. Not loaded with the ticket.</summary>
+    public IReadOnlyCollection<TicketEscalation> Escalations => _escalations;
 
     /// <summary>
     /// Raises a new ticket for a customer. It starts as <see cref="TicketStatus.New"/>, with no
@@ -77,6 +106,108 @@ public sealed class Ticket : AggregateRoot
             CreatedAtUtc = nowUtc,
             UpdatedAtUtc = nowUtc
         };
+    }
+
+    /// <summary>
+    /// Takes on what triage decided: priority, owner (or none), and an SLA window that starts
+    /// now, so the due date is <paramref name="nowUtc"/> plus the window.
+    /// </summary>
+    /// <exception cref="BusinessRuleViolationException">The ticket is resolved or closed.</exception>
+    public void ApplyTriage(TriageDecision triage, DateTime nowUtc)
+    {
+        if (!IsOpen)
+        {
+            throw new BusinessRuleViolationException(
+                $"Ticket {Reference} is {Status} and cannot be triaged.");
+        }
+
+        Apply(triage, nowUtc);
+    }
+
+    /// <summary>
+    /// Throws unless the ticket can be escalated, saying which rule stops it.
+    /// </summary>
+    /// <exception cref="BusinessRuleViolationException">The ticket is resolved, closed or already Critical.</exception>
+    public void EnsureCanEscalate()
+    {
+        if (!IsOpen)
+        {
+            throw new BusinessRuleViolationException(
+                $"Ticket {Reference} is {Status} and cannot be escalated.");
+        }
+
+        if (Priority == TicketPriority.Critical)
+        {
+            throw new BusinessRuleViolationException(
+                $"Ticket {Reference} is already Critical and cannot be escalated further.");
+        }
+    }
+
+    /// <summary>The priority one level up from the current one.</summary>
+    /// <exception cref="BusinessRuleViolationException">The ticket cannot be escalated.</exception>
+    public TicketPriority NextPriority()
+    {
+        EnsureCanEscalate();
+
+        return Priority + 1;
+    }
+
+    /// <summary>
+    /// Raises the priority one level and takes on the re-triage done for it: an SLA window
+    /// starting now, and an owner kept or changed. Records the change as a history row.
+    /// </summary>
+    /// <exception cref="BusinessRuleViolationException">The ticket cannot be escalated.</exception>
+    /// <exception cref="ArgumentException">
+    /// The triage is not for the next priority, the reason is missing or too long, or the actor
+    /// has no id or name.
+    /// </exception>
+    public TicketEscalation Escalate(TriageDecision triage, string reason, EscalationActor escalatedBy, DateTime nowUtc)
+    {
+        var toPriority = NextPriority();
+
+        if (triage.Priority.Priority != toPriority)
+        {
+            throw new ArgumentException(
+                $"Escalating {Reference} goes to {toPriority}, but the triage is for {triage.Priority.Priority}.",
+                nameof(triage));
+        }
+
+        var trimmedReason = reason?.Trim() ?? string.Empty;
+        if (trimmedReason.Length is < TicketEscalation.ReasonMinLength or > TicketEscalation.ReasonMaxLength)
+        {
+            throw new ArgumentException(
+                $"An escalation reason must be {TicketEscalation.ReasonMinLength}-{TicketEscalation.ReasonMaxLength} characters.",
+                nameof(reason));
+        }
+
+        ArgumentNullException.ThrowIfNull(escalatedBy);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(escalatedBy.AgentId, nameof(escalatedBy));
+        ArgumentException.ThrowIfNullOrWhiteSpace(escalatedBy.Name, nameof(escalatedBy));
+        var actorName = escalatedBy.Name.Trim();
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(actorName.Length, TicketEscalation.EscalatedByMaxLength, nameof(escalatedBy));
+
+        var (fromPriority, fromAgentId, fromDueAtUtc) = (Priority, AssignedAgentId, DueAtUtc);
+
+        Apply(triage, nowUtc);
+
+        var escalation = new TicketEscalation(
+            Id, fromPriority, Priority, fromAgentId, AssignedAgentId, fromDueAtUtc, DueAtUtc!.Value,
+            trimmedReason, escalatedBy.AgentId, actorName, nowUtc);
+
+        _escalations.Add(escalation);
+
+        return escalation;
+    }
+
+    private void Apply(TriageDecision triage, DateTime nowUtc)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(triage.Window.Minutes);
+
+        Priority = triage.Priority.Priority;
+        AssignedAgentId = triage.Assignment.AgentId;
+        SlaWindowMinutes = triage.Window.Minutes;
+        DueAtUtc = nowUtc.AddMinutes(triage.Window.Minutes);
+        UpdatedAtUtc = nowUtc;
     }
 
     /// <summary>

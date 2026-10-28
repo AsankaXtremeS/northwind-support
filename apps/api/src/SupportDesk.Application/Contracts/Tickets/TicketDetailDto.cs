@@ -35,4 +35,7 @@ public sealed class TicketDetailDto
 
     /// <summary>Derived from the dates above; never stored.</summary>
     public SlaStatus SlaStatus { get; set; }
+
+    /// <summary>Whether the ticket can be escalated now: still open and not already Critical.</summary>
+    public bool CanEscalate { get; set; }
 }

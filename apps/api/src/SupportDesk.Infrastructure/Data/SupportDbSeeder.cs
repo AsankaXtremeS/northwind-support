@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using SupportDesk.Application.Abstractions;
 using SupportDesk.Domain.Aggregates.Agents;
 using SupportDesk.Domain.Aggregates.Categories;
@@ -14,20 +15,38 @@ namespace SupportDesk.Infrastructure.Data;
 /// produce the same database.
 /// </summary>
 /// <remarks>
-/// Every aggregate is built through its own behaviour. The two historical values no behaviour
-/// produces - a ticket's last update and its due date - are set through EF Core directly.
+/// Every aggregate is built through its own behaviour. The historical values no behaviour
+/// produces - a ticket's last update, its due date and its SLA window - are set through EF Core
+/// directly.
 /// </remarks>
-public sealed class SupportDbSeeder(SupportDbContext db, IClock clock, ILogger<SupportDbSeeder> logger)
+public sealed class SupportDbSeeder(
+    SupportDbContext db,
+    IClock clock,
+    IPasswordHasher passwordHasher,
+    IOptions<SeedOptions> seedOptions,
+    ILogger<SupportDbSeeder> logger)
 {
-    /// <summary>Seeds the database, unless it already has tickets in it.</summary>
+    /// <summary>
+    /// Seeds the demo data, unless the database already has tickets in it, then gives any agent
+    /// without a login the configured <see cref="SeedOptions.AgentPassword"/>.
+    /// </summary>
     public async Task SeedAsync(CancellationToken ct = default)
     {
         if (await db.Set<Ticket>().AnyAsync(ct))
         {
             logger.LogInformation("Seed data already present; skipping.");
-            return;
+        }
+        else
+        {
+            await SeedDemoDataAsync(ct);
         }
 
+        // Separate from the demo data, so a database seeded before logins existed gets them too.
+        await SeedDevelopmentPasswordsAsync(ct);
+    }
+
+    private async Task SeedDemoDataAsync(CancellationToken ct)
+    {
         var now = clock.UtcNow;
 
         var categories = SeedCategories();
@@ -48,6 +67,43 @@ public sealed class SupportDbSeeder(SupportDbContext db, IClock clock, ILogger<S
         logger.LogInformation(
             "Seeded {Categories} categories, {Customers} customers, {Agents} agents and {Tickets} tickets.",
             categories.Count, customers.Count, agents.Count, await db.Set<Ticket>().CountAsync(ct));
+    }
+
+    /// <summary>
+    /// Hashes the configured password for every agent that has no login yet, each with its own
+    /// salt. Agents that already have one are left alone. Inactive agents get one too: being
+    /// inactive is what stops them signing in, not a missing password. The password comes from
+    /// configuration, so no plain-text password is ever in source.
+    /// </summary>
+    private async Task SeedDevelopmentPasswordsAsync(CancellationToken ct)
+    {
+        var password = seedOptions.Value.AgentPassword;
+
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            logger.LogWarning(
+                "{Setting} is not set, so agents without a login get none. See README.md.",
+                $"{SeedOptions.SectionName}:{nameof(SeedOptions.AgentPassword)}");
+            return;
+        }
+
+        var agentsWithoutLogin = await db.Set<Agent>()
+            .Where(a => a.PasswordHash == null)
+            .ToListAsync(ct);
+
+        if (agentsWithoutLogin.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var agent in agentsWithoutLogin)
+        {
+            agent.SetPasswordHash(passwordHasher.Hash(password));
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        logger.LogInformation("Set the development password for {Agents} agents.", agentsWithoutLogin.Count);
     }
 
     private static List<Category> SeedCategories() =>
@@ -195,6 +251,7 @@ public sealed class SupportDbSeeder(SupportDbContext db, IClock clock, ILogger<S
             entry.Property(t => t.UpdatedAtUtc).CurrentValue =
                 createdAtUtc.AddMinutes(row.ResolvedAfterMinutes ?? row.CreatedMinutesAgo / 2);
             entry.Property(t => t.DueAtUtc).CurrentValue = createdAtUtc.AddMinutes(row.SlaWindowMinutes);
+            entry.Property(t => t.SlaWindowMinutes).CurrentValue = row.SlaWindowMinutes;
         }
     }
 

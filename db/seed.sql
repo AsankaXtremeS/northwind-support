@@ -19,6 +19,7 @@ GO
 
 SET NOCOUNT ON;
 
+DELETE FROM dbo.TicketEscalations;
 DELETE FROM dbo.AgentSpecializations;
 DELETE FROM dbo.Tickets;
 DELETE FROM dbo.Agents;
@@ -26,6 +27,7 @@ DELETE FROM dbo.Customers;
 DELETE FROM dbo.Categories;
 GO
 
+DBCC CHECKIDENT ('dbo.TicketEscalations', RESEED, 0) WITH NO_INFOMSGS;
 DBCC CHECKIDENT ('dbo.Tickets',    RESEED, 0) WITH NO_INFOMSGS;
 DBCC CHECKIDENT ('dbo.Agents',     RESEED, 0) WITH NO_INFOMSGS;
 DBCC CHECKIDENT ('dbo.Customers',  RESEED, 0) WITH NO_INFOMSGS;
@@ -59,7 +61,10 @@ SET IDENTITY_INSERT dbo.Customers OFF;
 /* ----------------------------------------------------------------- Agents */
 /* Marcus Doyle is deliberately at his MaxOpenTickets limit (6 open tickets),
    so he must be excluded by the "eligible agent" rule.
-   Yuki Tanaka is inactive but still owns historic closed tickets.            */
+   Yuki Tanaka is inactive but still owns historic closed tickets.
+   PasswordHash is left NULL on purpose: passwords are hashed at seed time by
+   the EF Core seeder, never stored here. Agents seeded by this script cannot
+   sign in until the API's development seeder has run.                       */
 SET IDENTITY_INSERT dbo.Agents ON;
 INSERT INTO dbo.Agents (Id, FullName, Email, IsActive, MaxOpenTickets, CreatedAtUtc) VALUES
     (1, N'Alex Turner',    N'alex.turner@northwind-support.example',    1, 10, DATEADD(DAY, -500, @Now)),
@@ -145,7 +150,7 @@ INSERT INTO dbo.AgentSpecializations (AgentId, CategoryId) VALUES
 )
 INSERT INTO dbo.Tickets
     (Reference, Title, [Description], CustomerId, CategoryId, AssignedAgentId, Priority, [Status],
-     CreatedAtUtc, UpdatedAtUtc, DueAtUtc, ResolvedAtUtc)
+     CreatedAtUtc, UpdatedAtUtc, DueAtUtc, SlaWindowMinutes, ResolvedAtUtc)
 SELECT
     s.Ref,
     s.Title,
@@ -158,6 +163,7 @@ SELECT
     DATEADD(MINUTE, -s.CreatedMinutesAgo, @Now),
     DATEADD(MINUTE, -s.CreatedMinutesAgo + ISNULL(s.ResolvedAfterMinutes, s.CreatedMinutesAgo / 2), @Now),
     DATEADD(MINUTE, -s.CreatedMinutesAgo + s.SlaWindowMinutes, @Now),
+    s.SlaWindowMinutes,
     CASE WHEN s.ResolvedAfterMinutes IS NULL THEN NULL
          ELSE DATEADD(MINUTE, -s.CreatedMinutesAgo + s.ResolvedAfterMinutes, @Now) END
 FROM Seed AS s;
@@ -193,7 +199,7 @@ SELECT CASE
            WHEN t.[Status] IN (4, 5) THEN 'Breached'
            WHEN SYSUTCDATETIME() > t.DueAtUtc THEN 'Breached'
            WHEN DATEDIFF(MINUTE, SYSUTCDATETIME(), t.DueAtUtc) * 4
-                <= DATEDIFF(MINUTE, t.CreatedAtUtc, t.DueAtUtc) THEN 'AtRisk'
+                <= t.SlaWindowMinutes THEN 'AtRisk'
            ELSE 'WithinSla'
        END AS SlaStatus,
        COUNT(*) AS Tickets
@@ -204,7 +210,7 @@ GROUP BY CASE
            WHEN t.[Status] IN (4, 5) THEN 'Breached'
            WHEN SYSUTCDATETIME() > t.DueAtUtc THEN 'Breached'
            WHEN DATEDIFF(MINUTE, SYSUTCDATETIME(), t.DueAtUtc) * 4
-                <= DATEDIFF(MINUTE, t.CreatedAtUtc, t.DueAtUtc) THEN 'AtRisk'
+                <= t.SlaWindowMinutes THEN 'AtRisk'
            ELSE 'WithinSla'
        END
 ORDER BY SlaStatus;

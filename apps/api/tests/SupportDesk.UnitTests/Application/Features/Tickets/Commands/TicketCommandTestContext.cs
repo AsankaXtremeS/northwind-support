@@ -3,12 +3,16 @@ using SupportDesk.Application.Abstractions;
 using SupportDesk.Application.Contracts.Tickets;
 using SupportDesk.Application.Features.Tickets.Commands.AssignTicket;
 using SupportDesk.Application.Features.Tickets.Commands.ChangeTicketStatus;
+using SupportDesk.Application.Features.Tickets.Commands.EscalateTicket;
 using SupportDesk.Application.Features.Tickets.Commands.RaiseTicket;
 using SupportDesk.Application.Features.Tickets.Queries.GetTicket;
+using SupportDesk.Application.Features.Tickets.Triage;
 using SupportDesk.Domain.Aggregates.Agents;
+using SupportDesk.Domain.Aggregates.Categories;
 using SupportDesk.Domain.Aggregates.Customers;
 using SupportDesk.Domain.Aggregates.Tickets;
 using SupportDesk.Domain.Repositories;
+using SupportDesk.Domain.Triage;
 using SupportDesk.UnitTests.TestDoubles;
 
 namespace SupportDesk.UnitTests.Application.Features.Tickets.Commands;
@@ -21,11 +25,15 @@ internal sealed class TicketCommandTestContext
 {
     public TicketCommandTestContext()
     {
-        Customers.Setup(c => c.ExistsAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+        // Lambdas, so a test can swap the customer, category or candidates after construction.
+        Customers.Setup(c => c.GetByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => Customer);
 
-        Categories.Setup(c => c.ExistsAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+        Categories.Setup(c => c.GetByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => Category);
+
+        Agents.Setup(a => a.GetCandidatesAsync(It.IsAny<int>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => Candidates);
 
         Tickets.Setup(t => t.NextReferenceAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync("TCK-0041");
@@ -44,11 +52,28 @@ internal sealed class TicketCommandTestContext
                 Category = new CategoryDto(1, "General", false)
             });
 
+        // The history as re-read after an escalation; an unsaved escalation still has id 0.
+        TicketQueries.Setup(q => q.GetEscalationsAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                new TicketEscalationDto(0, TicketPriority.Medium, TicketPriority.High, null, null,
+                    null, FixedClock.DefaultNow.AddHours(8), "Customer is losing sales.", "Sara Lindqvist", FixedClock.DefaultNow)
+            ]);
+
+        // The agent the request is signed in as, the one an escalation is recorded against.
+        CurrentUser.Setup(u => u.AgentId).Returns(SignedInAgentId);
+        ExistingAgent(SignedInAgentId, "Sara Lindqvist");
+
         var getTicket = new GetTicketQueryHandler(TicketQueries.Object);
 
+        Triage = new TicketTriage(Agents.Object, new SlaWindowPolicy(ShippedSlaTerms));
+
         RaiseTicket = new RaiseTicketCommandHandler(
-            Tickets.Object, Customers.Object, Categories.Object, UnitOfWork.Object, Clock, getTicket,
+            Tickets.Object, Customers.Object, Categories.Object, Triage, UnitOfWork.Object, Clock, getTicket,
             NullLogger<RaiseTicketCommandHandler>.Instance);
+
+        EscalateTicket = new EscalateTicketCommandHandler(
+            CurrentUser.Object, Agents.Object, Tickets.Object, Customers.Object, Categories.Object, Triage, UnitOfWork.Object, Clock, getTicket,
+            TicketQueries.Object, NullLogger<EscalateTicketCommandHandler>.Instance);
 
         ChangeTicketStatus = new ChangeTicketStatusCommandHandler(Tickets.Object, UnitOfWork.Object, Clock, getTicket);
 
@@ -56,6 +81,11 @@ internal sealed class TicketCommandTestContext
             Tickets.Object, Agents.Object, UnitOfWork.Object, Clock, getTicket,
             NullLogger<AssignTicketCommandHandler>.Instance);
     }
+
+    /// <summary>The id the signed-in agent's token carries; well clear of the ids tests use for owners.</summary>
+    public const int SignedInAgentId = 99;
+
+    public Mock<ICurrentUser> CurrentUser { get; } = new();
 
     public Mock<ITicketRepository> Tickets { get; } = new();
 
@@ -71,7 +101,33 @@ internal sealed class TicketCommandTestContext
 
     public FixedClock Clock { get; } = new();
 
+    /// <summary>The SLA terms shipped in appsettings.json.</summary>
+    public static SlaTerms ShippedSlaTerms { get; } = new(
+        new Dictionary<TicketPriority, double>
+        {
+            [TicketPriority.Low] = 72,
+            [TicketPriority.Medium] = 24,
+            [TicketPriority.High] = 8,
+            [TicketPriority.Critical] = 4
+        },
+        PremiumCustomerMultiplier: 0.5,
+        MinimumWindowHours: 1);
+
+    /// <summary>The customer every lookup returns; Standard tier unless a test changes it.</summary>
+    public Customer Customer { get; set; } =
+        new("Fabrikam Inc", "helpdesk@fabrikam.example", null, CustomerTier.Standard, FixedClock.DefaultNow);
+
+    /// <summary>The category every lookup returns; no special rules unless a test changes it.</summary>
+    public Category Category { get; set; } = new("General", requiresSpecialist: false, forcesCriticalPriority: false);
+
+    /// <summary>The agents triage chooses from. Empty unless a test adds some.</summary>
+    public List<AgentCandidate> Candidates { get; } = [];
+
+    public TicketTriage Triage { get; }
+
     public RaiseTicketCommandHandler RaiseTicket { get; }
+
+    public EscalateTicketCommandHandler EscalateTicket { get; }
 
     public ChangeTicketStatusCommandHandler ChangeTicketStatus { get; }
 

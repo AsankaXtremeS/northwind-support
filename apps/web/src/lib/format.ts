@@ -39,3 +39,15 @@ export function humanize(value: string): string {
 
   return spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase();
 }
+
+/** A length of time in minutes as "4 h", "45 min" or "1 h 30 min". */
+export function formatMinutes(totalMinutes: number): string {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours === 0) {
+    return `${minutes} min`;
+  }
+
+  return minutes === 0 ? `${hours} h` : `${hours} h ${minutes} min`;
+}

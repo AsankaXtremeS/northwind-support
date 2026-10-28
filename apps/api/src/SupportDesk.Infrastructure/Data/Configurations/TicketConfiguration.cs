@@ -19,6 +19,7 @@ public sealed class TicketConfiguration : IEntityTypeConfiguration<Ticket>
         {
             t.HasCheckConstraint("CK_Tickets_Priority", "[Priority] BETWEEN 1 AND 4");
             t.HasCheckConstraint("CK_Tickets_Status", "[Status] BETWEEN 1 AND 5");
+            t.HasCheckConstraint("CK_Tickets_SlaWindowMinutes", "[SlaWindowMinutes] > 0");
         });
 
         builder.HasKey(t => t.Id);
@@ -58,6 +59,17 @@ public sealed class TicketConfiguration : IEntityTypeConfiguration<Ticket>
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.Ignore(t => t.IsOpen);
+
+        builder.Ignore(t => t.CanEscalate);
+
+        // Escalations belong to the ticket. Restrict: a ticket with history is never deleted
+        // along with it by accident.
+        builder.HasMany(t => t.Escalations)
+            .WithOne()
+            .HasForeignKey(e => e.TicketId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Navigation(t => t.Escalations).UsePropertyAccessMode(PropertyAccessMode.Field);
 
         builder.HasIndex(t => t.Reference).IsUnique().HasDatabaseName("UQ_Tickets_Reference");
 

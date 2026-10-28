@@ -79,6 +79,33 @@ export interface TicketDetail {
   dueAtUtc: string | null;
   resolvedAtUtc: string | null;
   slaStatus: SlaStatus;
+  /** Still open and not already Critical. */
+  canEscalate: boolean;
+}
+
+/** One escalation: priority, owner and due date before and after, and who did it and why. */
+export interface TicketEscalation {
+  id: number;
+  fromPriority: TicketPriority;
+  toPriority: TicketPriority;
+  fromAgent: AgentSummary | null;
+  toAgent: AgentSummary | null;
+  fromDueAtUtc: string | null;
+  toDueAtUtc: string;
+  reason: string;
+  escalatedBy: string;
+  escalatedAtUtc: string;
+}
+
+/** Who escalates is not sent: the API takes it from the sign-in token. */
+export interface EscalateTicketPayload {
+  reason: string;
+}
+
+/** Response of POST /api/tickets/{id}/escalate. */
+export interface EscalatedTicket {
+  ticket: TicketDetail;
+  escalation: TicketEscalation;
 }
 
 /** Everything the ticket list screen can narrow the results by. */
@@ -90,10 +117,27 @@ export interface TicketFilters {
   customerId?: number;
   assignedAgentId?: number;
   unassignedOnly?: boolean;
+  slaStatus?: SlaStatus;
   page: number;
   pageSize: number;
   sortBy: TicketSortField;
   sortDirection: SortDirection;
+}
+
+/** What triage decided for a new ticket, with the reason for each part. */
+export interface Triage {
+  priority: TicketPriority;
+  priorityReason: string;
+  slaWindowMinutes: number;
+  slaWindowReason: string;
+  assignedAgent: AgentSummary | null;
+  assignmentReason: string;
+}
+
+/** Response of POST /api/tickets. */
+export interface RaisedTicket {
+  ticket: TicketDetail;
+  triage: Triage;
 }
 
 export interface CreateTicketPayload {
@@ -139,6 +183,25 @@ export interface CustomerDetail {
   tier: CustomerTier;
   createdAtUtc: string;
   tickets: TicketListItem[];
+}
+
+/** The signed-in agent: enough to greet them. */
+export interface AuthUser {
+  id: number;
+  fullName: string;
+  email: string;
+}
+
+export interface LoginPayload {
+  email: string;
+  password: string;
+}
+
+/** Response of POST /api/auth/login. */
+export interface LoginResponse {
+  token: string;
+  expiresAtUtc: string;
+  user: AuthUser;
 }
 
 /** RFC 7807 problem document, which is how the API reports every failure. */

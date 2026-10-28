@@ -17,6 +17,7 @@ GO
 USE SupportDesk;
 GO
 
+IF OBJECT_ID('dbo.TicketEscalations', 'U')    IS NOT NULL DROP TABLE dbo.TicketEscalations;
 IF OBJECT_ID('dbo.AgentSpecializations', 'U') IS NOT NULL DROP TABLE dbo.AgentSpecializations;
 IF OBJECT_ID('dbo.Tickets', 'U')              IS NOT NULL DROP TABLE dbo.Tickets;
 IF OBJECT_ID('dbo.Agents', 'U')               IS NOT NULL DROP TABLE dbo.Agents;
@@ -61,6 +62,7 @@ CREATE TABLE dbo.Agents
     IsActive       BIT           NOT NULL CONSTRAINT DF_Agents_IsActive DEFAULT (1),
     MaxOpenTickets INT           NOT NULL CONSTRAINT DF_Agents_MaxOpenTickets DEFAULT (10),
     CreatedAtUtc   DATETIME2(3)  NOT NULL CONSTRAINT DF_Agents_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
+    PasswordHash   NVARCHAR(256) NULL,     -- salted hash; NULL = no login
     CONSTRAINT UQ_Agents_Email UNIQUE (Email),
     CONSTRAINT CK_Agents_MaxOpenTickets CHECK (MaxOpenTickets > 0)
 );
@@ -100,13 +102,15 @@ CREATE TABLE dbo.Tickets
     CreatedAtUtc    DATETIME2(3)    NOT NULL CONSTRAINT DF_Tickets_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
     UpdatedAtUtc    DATETIME2(3)    NOT NULL CONSTRAINT DF_Tickets_UpdatedAtUtc DEFAULT (SYSUTCDATETIME()),
     DueAtUtc        DATETIME2(3)    NULL,
+    SlaWindowMinutes INT            NULL,   /* window DueAtUtc was set from; restarts on escalation */
     ResolvedAtUtc   DATETIME2(3)    NULL,
     CONSTRAINT UQ_Tickets_Reference UNIQUE (Reference),
     CONSTRAINT FK_Tickets_Customers FOREIGN KEY (CustomerId)  REFERENCES dbo.Customers (Id),
     CONSTRAINT FK_Tickets_Categories FOREIGN KEY (CategoryId) REFERENCES dbo.Categories (Id),
     CONSTRAINT FK_Tickets_Agents FOREIGN KEY (AssignedAgentId) REFERENCES dbo.Agents (Id),
     CONSTRAINT CK_Tickets_Priority CHECK (Priority BETWEEN 1 AND 4),
-    CONSTRAINT CK_Tickets_Status   CHECK (Status   BETWEEN 1 AND 5)
+    CONSTRAINT CK_Tickets_Status   CHECK (Status   BETWEEN 1 AND 5),
+    CONSTRAINT CK_Tickets_SlaWindowMinutes CHECK (SlaWindowMinutes > 0)
 );
 GO
 
@@ -116,4 +120,33 @@ CREATE INDEX IX_Tickets_CustomerId        ON dbo.Tickets (CustomerId);
 CREATE INDEX IX_Tickets_AssignedAgentId   ON dbo.Tickets (AssignedAgentId) WHERE AssignedAgentId IS NOT NULL;
 CREATE INDEX IX_Tickets_CategoryId        ON dbo.Tickets (CategoryId);
 CREATE INDEX IX_Tickets_DueAtUtc          ON dbo.Tickets (DueAtUtc);
+GO
+
+/* ------------------------------------------------------- TicketEscalations */
+/* Immutable history: one row per escalation, never updated. */
+CREATE TABLE dbo.TicketEscalations
+(
+    Id              INT             IDENTITY(1,1) NOT NULL CONSTRAINT PK_TicketEscalations PRIMARY KEY,
+    TicketId        INT             NOT NULL,
+    FromPriority    INT             NOT NULL,
+    ToPriority      INT             NOT NULL,
+    FromAgentId     INT             NULL,
+    ToAgentId       INT             NULL,
+    FromDueAtUtc    DATETIME2(3)    NULL,
+    ToDueAtUtc      DATETIME2(3)    NOT NULL,
+    Reason          NVARCHAR(500)   NOT NULL,
+    EscalatedBy     NVARCHAR(100)   NOT NULL,
+    EscalatedAtUtc  DATETIME2(3)    NOT NULL,
+    CONSTRAINT FK_TicketEscalations_Tickets_TicketId     FOREIGN KEY (TicketId)    REFERENCES dbo.Tickets (Id),
+    CONSTRAINT FK_TicketEscalations_Agents_FromAgentId   FOREIGN KEY (FromAgentId) REFERENCES dbo.Agents (Id),
+    CONSTRAINT FK_TicketEscalations_Agents_ToAgentId     FOREIGN KEY (ToAgentId)   REFERENCES dbo.Agents (Id),
+    CONSTRAINT CK_TicketEscalations_FromPriority CHECK (FromPriority BETWEEN 1 AND 4),
+    CONSTRAINT CK_TicketEscalations_ToPriority   CHECK (ToPriority   BETWEEN 1 AND 4)
+);
+GO
+
+/* A ticket's history, newest first, as a seek; also covers the TicketId foreign key. */
+CREATE INDEX IX_TicketEscalations_TicketId_EscalatedAtUtc ON dbo.TicketEscalations (TicketId, EscalatedAtUtc DESC);
+CREATE INDEX IX_TicketEscalations_FromAgentId             ON dbo.TicketEscalations (FromAgentId);
+CREATE INDEX IX_TicketEscalations_ToAgentId               ON dbo.TicketEscalations (ToAgentId);
 GO

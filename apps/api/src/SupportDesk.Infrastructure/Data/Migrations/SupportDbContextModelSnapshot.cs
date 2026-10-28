@@ -22,7 +22,7 @@ namespace SupportDesk.Infrastructure.Data.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
-            modelBuilder.Entity("SupportDesk.Domain.Entities.Agent", b =>
+            modelBuilder.Entity("SupportDesk.Domain.Aggregates.Agents.Agent", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -49,6 +49,10 @@ namespace SupportDesk.Infrastructure.Data.Migrations
                     b.Property<int>("MaxOpenTickets")
                         .HasColumnType("int");
 
+                    b.Property<string>("PasswordHash")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Email")
@@ -61,7 +65,7 @@ namespace SupportDesk.Infrastructure.Data.Migrations
                         });
                 });
 
-            modelBuilder.Entity("SupportDesk.Domain.Entities.AgentSpecialization", b =>
+            modelBuilder.Entity("SupportDesk.Domain.Aggregates.Agents.AgentSpecialization", b =>
                 {
                     b.Property<int>("AgentId")
                         .HasColumnType("int");
@@ -79,7 +83,7 @@ namespace SupportDesk.Infrastructure.Data.Migrations
                     b.ToTable("AgentSpecializations", (string)null);
                 });
 
-            modelBuilder.Entity("SupportDesk.Domain.Entities.Category", b =>
+            modelBuilder.Entity("SupportDesk.Domain.Aggregates.Categories.Category", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -110,7 +114,7 @@ namespace SupportDesk.Infrastructure.Data.Migrations
                     b.ToTable("Categories", (string)null);
                 });
 
-            modelBuilder.Entity("SupportDesk.Domain.Entities.Customer", b =>
+            modelBuilder.Entity("SupportDesk.Domain.Aggregates.Customers.Customer", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -150,7 +154,7 @@ namespace SupportDesk.Infrastructure.Data.Migrations
                         });
                 });
 
-            modelBuilder.Entity("SupportDesk.Domain.Entities.Ticket", b =>
+            modelBuilder.Entity("SupportDesk.Domain.Aggregates.Tickets.Ticket", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -188,6 +192,9 @@ namespace SupportDesk.Infrastructure.Data.Migrations
 
                     b.Property<DateTime?>("ResolvedAtUtc")
                         .HasColumnType("datetime2(3)");
+
+                    b.Property<int?>("SlaWindowMinutes")
+                        .HasColumnType("int");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
@@ -228,72 +235,144 @@ namespace SupportDesk.Infrastructure.Data.Migrations
                         {
                             t.HasCheckConstraint("CK_Tickets_Priority", "[Priority] BETWEEN 1 AND 4");
 
+                            t.HasCheckConstraint("CK_Tickets_SlaWindowMinutes", "[SlaWindowMinutes] > 0");
+
                             t.HasCheckConstraint("CK_Tickets_Status", "[Status] BETWEEN 1 AND 5");
                         });
                 });
 
-            modelBuilder.Entity("SupportDesk.Domain.Entities.AgentSpecialization", b =>
+            modelBuilder.Entity("SupportDesk.Domain.Aggregates.Tickets.TicketEscalation", b =>
                 {
-                    b.HasOne("SupportDesk.Domain.Entities.Agent", "Agent")
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("EscalatedAtUtc")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<string>("EscalatedBy")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("EscalatedByAgentId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("FromAgentId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("FromDueAtUtc")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("FromPriority")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("TicketId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ToAgentId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ToDueAtUtc")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<int>("ToPriority")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EscalatedByAgentId");
+
+                    b.HasIndex("FromAgentId");
+
+                    b.HasIndex("ToAgentId");
+
+                    b.HasIndex("TicketId", "EscalatedAtUtc")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("IX_TicketEscalations_TicketId_EscalatedAtUtc");
+
+                    b.ToTable("TicketEscalations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TicketEscalations_FromPriority", "[FromPriority] BETWEEN 1 AND 4");
+
+                            t.HasCheckConstraint("CK_TicketEscalations_ToPriority", "[ToPriority] BETWEEN 1 AND 4");
+                        });
+                });
+
+            modelBuilder.Entity("SupportDesk.Domain.Aggregates.Agents.AgentSpecialization", b =>
+                {
+                    b.HasOne("SupportDesk.Domain.Aggregates.Agents.Agent", null)
                         .WithMany("Specializations")
                         .HasForeignKey("AgentId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("SupportDesk.Domain.Entities.Category", "Category")
-                        .WithMany("Specialists")
+                    b.HasOne("SupportDesk.Domain.Aggregates.Categories.Category", null)
+                        .WithMany()
                         .HasForeignKey("CategoryId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Agent");
-
-                    b.Navigation("Category");
                 });
 
-            modelBuilder.Entity("SupportDesk.Domain.Entities.Ticket", b =>
+            modelBuilder.Entity("SupportDesk.Domain.Aggregates.Tickets.Ticket", b =>
                 {
-                    b.HasOne("SupportDesk.Domain.Entities.Agent", "AssignedAgent")
-                        .WithMany("Tickets")
+                    b.HasOne("SupportDesk.Domain.Aggregates.Agents.Agent", null)
+                        .WithMany()
                         .HasForeignKey("AssignedAgentId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("SupportDesk.Domain.Entities.Category", "Category")
-                        .WithMany("Tickets")
+                    b.HasOne("SupportDesk.Domain.Aggregates.Categories.Category", null)
+                        .WithMany()
                         .HasForeignKey("CategoryId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("SupportDesk.Domain.Entities.Customer", "Customer")
-                        .WithMany("Tickets")
+                    b.HasOne("SupportDesk.Domain.Aggregates.Customers.Customer", null)
+                        .WithMany()
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.Navigation("AssignedAgent");
-
-                    b.Navigation("Category");
-
-                    b.Navigation("Customer");
                 });
 
-            modelBuilder.Entity("SupportDesk.Domain.Entities.Agent", b =>
+            modelBuilder.Entity("SupportDesk.Domain.Aggregates.Tickets.TicketEscalation", b =>
+                {
+                    b.HasOne("SupportDesk.Domain.Aggregates.Agents.Agent", null)
+                        .WithMany()
+                        .HasForeignKey("EscalatedByAgentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SupportDesk.Domain.Aggregates.Agents.Agent", null)
+                        .WithMany()
+                        .HasForeignKey("FromAgentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SupportDesk.Domain.Aggregates.Tickets.Ticket", null)
+                        .WithMany("Escalations")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SupportDesk.Domain.Aggregates.Agents.Agent", null)
+                        .WithMany()
+                        .HasForeignKey("ToAgentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("SupportDesk.Domain.Aggregates.Agents.Agent", b =>
                 {
                     b.Navigation("Specializations");
-
-                    b.Navigation("Tickets");
                 });
 
-            modelBuilder.Entity("SupportDesk.Domain.Entities.Category", b =>
+            modelBuilder.Entity("SupportDesk.Domain.Aggregates.Tickets.Ticket", b =>
                 {
-                    b.Navigation("Specialists");
-
-                    b.Navigation("Tickets");
-                });
-
-            modelBuilder.Entity("SupportDesk.Domain.Entities.Customer", b =>
-                {
-                    b.Navigation("Tickets");
+                    b.Navigation("Escalations");
                 });
 #pragma warning restore 612, 618
         }
